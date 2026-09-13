@@ -100,24 +100,27 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: lesecuritae/Korbunio
         run: |
           release_apk="korbuino-${GITHUB_REF_NAME#v}.apk"
 
           publish_release() {
-            if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-              assets="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
+            if gh release view "$GITHUB_REF_NAME" --repo "$GH_REPO" >/dev/null 2>&1; then
+              assets="$(gh release view "$GITHUB_REF_NAME" --repo "$GH_REPO" --json assets --jq '.assets[].name')"
               if grep -Fxq "$release_apk" <<<"$assets" && \
                  grep -Fxq "${release_apk}.sha256" <<<"$assets"; then
                 gh release edit "$GITHUB_REF_NAME" \
+                  --repo "$GH_REPO" \
                   --title "Korbunio $GITHUB_REF_NAME" \
                   --notes-file /tmp/release-notes.md || return 1
                 return
               fi
-              gh release delete "$GITHUB_REF_NAME" --yes || return 1
+              gh release delete "$GITHUB_REF_NAME" --repo "$GH_REPO" --yes || return 1
             fi
 
             gh release create "$GITHUB_REF_NAME" \
               "$release_apk" "${release_apk}.sha256" \
+              --repo "$GH_REPO" \
               --title "Korbunio $GITHUB_REF_NAME" \
               --notes-file /tmp/release-notes.md \
               --verify-tag
@@ -126,7 +129,7 @@ jobs:
           published=false
           for attempt in 1 2 3 4; do
             if publish_release; then
-              assets="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
+              assets="$(gh api "repos/$GH_REPO/releases/tags/$GITHUB_REF_NAME" --jq '.assets[].name')"
               if grep -Fxq "$release_apk" <<<"$assets" && \
                  grep -Fxq "${release_apk}.sha256" <<<"$assets"; then
                 published=true
@@ -144,13 +147,14 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: lesecuritae/Korbunio
         run: |
           close_issue() {
             issue="$1"
             comment="$2"
-            state="$(gh issue view "$issue" --json state --jq .state)"
+            state="$(gh issue view "$issue" --repo "$GH_REPO" --json state --jq .state)"
             if [ "$state" = "OPEN" ]; then
-              gh issue close "$issue" --reason completed --comment "$comment"
+              gh issue close "$issue" --repo "$GH_REPO" --reason completed --comment "$comment"
             fi
           }
 
