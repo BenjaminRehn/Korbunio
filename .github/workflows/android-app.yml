@@ -94,6 +94,9 @@ jobs:
           release_apk="korbuino-${version}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$release_apk"
           sha256sum "$release_apk" > "${release_apk}.sha256"
+          compatibility_apk="korbunio-${version}.apk"
+          cp "$release_apk" "$compatibility_apk"
+          sha256sum "$compatibility_apk" > "${compatibility_apk}.sha256"
           awk 'NR == 1 { next } /^# / { exit } { print }' RELEASE_NOTES.md > /tmp/release-notes.md
 
       - name: Publish tagged APK release
@@ -118,6 +121,8 @@ jobs:
           asset_paths = [
               Path(f"korbuino-{version}.apk"),
               Path(f"korbuino-{version}.apk.sha256"),
+              Path(f"korbunio-{version}.apk"),
+              Path(f"korbunio-{version}.apk.sha256"),
           ]
           expected_assets = {path.name for path in asset_paths}
           api_base = f"https://api.github.com/repos/{repository}"

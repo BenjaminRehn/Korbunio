@@ -42,6 +42,9 @@
   KitchenOwl-Synchronisation benötigen dabei einen Korbunio-Server.
 - Die Docker-Startseite verwendet jetzt durchgängig den Namen Korbunio und
   zeigt ihre laufende Version im Seitenfuß an.
+- Für bestehende Obtainium-Einträge wird zusätzlich ein inhaltsgleicher
+  `korbunio-<version>.apk`-Kompatibilitätsname veröffentlicht. Dadurch bleiben
+  vor der Namenskorrektur automatisch gespeicherte APK-Filter updatefähig.
 
 ### Validierung
 
