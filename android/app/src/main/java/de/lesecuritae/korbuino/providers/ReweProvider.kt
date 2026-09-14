@@ -4,6 +4,9 @@ import de.lesecuritae.korbuino.data.OfferEntity
 import de.lesecuritae.korbuino.data.ProductEntity
 import java.text.Normalizer
 import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
+import java.time.DayOfWeek
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +26,7 @@ class ReweProvider(
     private val http: OkHttpClient = OkHttpClient(),
     private val baseUrl: String = "https://www.rewe.de",
     private val fallback: RetailerProvider? = null,
+    private val now: () -> Instant = Instant::now,
 ) : RetailerProvider {
     override val id = "rewe"
     override val displayName = "REWE"
@@ -57,9 +61,11 @@ class ReweProvider(
         val marketPage = get("$baseUrl/marktsuche/$city/")
         val market = findMarket(marketPage, request.postalCode, request.marketId)
             ?: error("Kein REWE-Markt für ${request.postalCode} gefunden")
-        val url = market.url + if (request.week == OfferWeek.NEXT) "?week=next" else ""
+        val berlinToday = now().atZone(BERLIN).toLocalDate()
+        val nextWeek = request.week == OfferWeek.NEXT || berlinToday.dayOfWeek == DayOfWeek.SUNDAY
+        val url = market.url + if (nextWeek) "?week=next" else ""
         val page = get(url)
-        val parsed = parseOffers(page, market.id, url)
+        val parsed = parseOffers(page, market.id, url, nextWeek)
         if (parsed.offers.isEmpty()) error("Keine auswertbaren REWE-Angebote gefunden")
         return parsed
     }
@@ -94,9 +100,12 @@ class ReweProvider(
             .firstOrNull { selectedId == null || it.id == selectedId }
     }
 
-    private fun parseOffers(html: String, marketId: String, marketUrl: String): ProviderResult {
+    private fun parseOffers(html: String, marketId: String, marketUrl: String, nextWeek: Boolean = false): ProviderResult {
         val doc = Jsoup.parse(html)
-        val from = LocalDate.now().with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+        val today = now().atZone(BERLIN).toLocalDate()
+        val currentMonday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val from = if (nextWeek && today.dayOfWeek != DayOfWeek.SUNDAY) currentMonday.plusWeeks(1)
+            else if (nextWeek) today.plusDays(1) else currentMonday
         val until = from.plusDays(6)
         val products = mutableListOf<ProductEntity>()
         val offers = mutableListOf<OfferEntity>()
@@ -139,4 +148,8 @@ class ReweProvider(
         .replace("\\p{M}".toRegex(), "")
         .replace("[^a-z0-9]+".toRegex(), "-")
         .trim('-')
+
+    companion object {
+        private val BERLIN = ZoneId.of("Europe/Berlin")
+    }
 }

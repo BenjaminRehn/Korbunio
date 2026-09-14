@@ -1,3 +1,15 @@
+# 0.1.36
+
+## Sonntagswechsel und regionale Angebotsbilder
+
+- Die native Android-App wählt für REWE sonntags automatisch die kommende
+  Angebotswoche und berechnet Gültigkeitsdaten in der Zeitzone Europe/Berlin.
+- Regionale Marktguru-Angebote, darunter famila Nordwest, werden anhand des
+  Berliner Kalenderdatums geprüft und bleiben am Wochenwechsel verfügbar.
+- GLOBUS-Angebote werden weiterhin direkt aus dem offiziellen regionalen
+  Prospekt geladen. KaufDA-Bilder können auch bei leicht abweichenden Preisen
+  über ausreichend übereinstimmende Produktnamen zugeordnet werden.
+
 # 0.1.35
 
 ## Händlerbestand, aktuelle Prospekte und mobiles Layout

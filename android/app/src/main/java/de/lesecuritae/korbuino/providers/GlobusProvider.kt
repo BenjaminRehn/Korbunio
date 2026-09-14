@@ -127,8 +127,30 @@ class GlobusProvider(
         val productNames = result.products.associate { it.id to normalize(it.name) }
         return result.copy(offers = result.offers.map { offer ->
             if (offer.imageUrl != null) offer
-            else offer.copy(imageUrl = byIdentity[productNames[offer.productId] to offer.priceCents]?.url)
+            else {
+                val name = productNames[offer.productId].orEmpty()
+                val exact = byIdentity[name to offer.priceCents]
+                val candidate = exact ?: images
+                    .asSequence()
+                    .map { it to nameSimilarity(name, it.normalizedName) }
+                    .filter { (_, score) -> score >= 0.55 }
+                    .sortedWith(
+                        compareByDescending<Pair<ImageMatch, Double>> { it.second }
+                            .thenBy { kotlin.math.abs(it.first.priceCents - offer.priceCents) },
+                    )
+                    .map { it.first }
+                    .firstOrNull()
+                offer.copy(imageUrl = candidate?.url)
+            }
         })
+    }
+
+    /** KaufDA and Globus format the same product names and prices differently. */
+    private fun nameSimilarity(left: String, right: String): Double {
+        val a = left.split('-').filter { it.length >= 2 }.toSet()
+        val b = right.split('-').filter { it.length >= 2 }.toSet()
+        if (a.isEmpty() || b.isEmpty()) return 0.0
+        return a.intersect(b).size.toDouble() / maxOf(a.size, b.size)
     }
 
     private fun cents(price: Double): Int = BigDecimal.valueOf(price).movePointRight(2)

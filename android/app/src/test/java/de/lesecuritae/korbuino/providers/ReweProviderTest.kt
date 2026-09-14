@@ -11,6 +11,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.Instant
 
 class ReweProviderTest {
     private lateinit var server: MockWebServer
@@ -46,6 +47,28 @@ class ReweProviderTest {
             assertTrue(error.message.orEmpty().contains("PLZ"))
         }
         assertEquals(0, server.requestCount)
+    }
+
+    @Test fun `selects next week automatically on Sunday in Berlin`() = runTest {
+        server.enqueue(MockResponse().setBody("""
+            <a href="/angebote/teststadt/123456/rewe-markt-hauptstrasse/">REWE Markt 12345 Teststadt</a>
+        """))
+        server.enqueue(MockResponse().setBody("""
+            <div class="cor-offer-renderer-tile">
+              <div class="cor-offer-information__title">Montagsangebot</div>
+              <span class="cor-offer-price__tag-price">1,29 €</span>
+            </div>
+        """))
+        val provider = ReweProvider(
+            OkHttpClient(), server.url("/").toString().trimEnd('/'),
+            now = { Instant.parse("2026-09-13T10:00:00Z") },
+        )
+
+        val result = provider.fetch(RetailerRequest("12345", citySlug = "teststadt"))
+
+        assertTrue(server.takeRequest().path.orEmpty().contains("marktsuche"))
+        assertTrue(server.takeRequest().path.orEmpty().endsWith("?week=next"))
+        assertEquals("2026-09-14", result.offers.single().validFrom)
     }
 
     @Test fun `uses regional fallback when direct page only exposes ten offers`() = runTest {

@@ -17,6 +17,7 @@ import okhttp3.Request
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 
@@ -136,16 +137,19 @@ class MarktguruProvider(
     private fun activeValidity(item: JsonObject): Pair<String?, String?>? {
         val rawRanges = item["validityDates"] ?: return null to null
         val ranges = runCatching { rawRanges.jsonArray }.getOrNull() ?: return null
-        val current = now()
+        val current = now().atZone(ZoneId.of("Europe/Berlin")).toLocalDate()
         val active = ranges.firstNotNullOfOrNull { raw ->
             val range = raw.jsonObject
             val fromText = text(range, "from") ?: return@firstNotNullOfOrNull null
             val untilText = text(range, "to") ?: return@firstNotNullOfOrNull null
-            val from = runCatching { Instant.parse(fromText) }.getOrNull() ?: return@firstNotNullOfOrNull null
-            val until = runCatching { Instant.parse(untilText) }.getOrNull() ?: return@firstNotNullOfOrNull null
+            val from = runCatching { Instant.parse(fromText).atZone(ZoneId.of("Europe/Berlin")).toLocalDate() }
+                .getOrElse { runCatching { LocalDate.parse(fromText.take(10)) }.getOrNull() }
+                ?: return@firstNotNullOfOrNull null
+            val until = runCatching { Instant.parse(untilText).atZone(ZoneId.of("Europe/Berlin")).toLocalDate() }
+                .getOrElse { runCatching { LocalDate.parse(untilText.take(10)) }.getOrNull() }
+                ?: return@firstNotNullOfOrNull null
             if (current < from || current > until) return@firstNotNullOfOrNull null
-            val zone = ZoneId.of("Europe/Berlin")
-            from.atZone(zone).toLocalDate().toString() to until.atZone(zone).toLocalDate().toString()
+            from.toString() to until.toString()
         }
         return active
     }
