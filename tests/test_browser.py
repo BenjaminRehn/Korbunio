@@ -17,7 +17,7 @@ def test_home_and_static_assets():
     assert 'src="/static/home-v2.js"' in response.text
     assert '<progress id="statusProgress"' in response.text
     assert "Welche Märkte möchtest du vergleichen?" in response.text
-    assert response.text.count('name="retailers"') == 15
+    assert response.text.count('name="retailers"') == 16
     assert 'value="dm" checked' in response.text
     assert 'value="Globus" checked' in response.text
     assert 'name="rewe_market_id"' in response.text
@@ -122,7 +122,7 @@ def test_search_job_route_passes_refresh_to_the_job_store(monkeypatch):
     recorded = {}
 
     class RecordingJobs:
-        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id=""):
+        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id="", trinkgut_market_id=""):
             recorded["value"] = refresh
             recorded["retailers"] = retailers
             return "job-id"
@@ -146,7 +146,7 @@ def test_search_job_passes_explicit_next_week(monkeypatch):
     recorded = {}
 
     class RecordingJobs:
-        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id="", offer_week="current"):
+        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id="", offer_week="current", trinkgut_market_id=""):
             recorded["offer_week"] = offer_week
             return "job-id"
 
