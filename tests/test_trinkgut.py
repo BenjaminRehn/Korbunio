@@ -1,10 +1,9 @@
 from datetime import date
-from pathlib import Path
 from types import SimpleNamespace
 from bs4 import BeautifulSoup
 import pytest
 
-from supermarkt.models import Offer, ToolError
+from supermarkt.models import ToolError
 from supermarkt.sources.trinkgut import OfficialTrinkgutSource
 
 
