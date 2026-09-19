@@ -156,6 +156,12 @@ class _FakeKitchenOwl:
 
             def do_GET(self):
                 outer.requests.append(("GET", self.path, self.headers.get("Authorization")))
+                if self.headers.get("Authorization") != "Bearer test-token":
+                    self.send_response(401); self.send_header("Content-Length", "0"); self.end_headers(); return
+                if self.path == "/api/household":
+                    return self._reply([{"id": 1, "name": "Haus"}])
+                if self.path == "/api/household/1/shoppinglist":
+                    return self._reply([{"id": 7, "name": "Einkauf"}, {"id": 8, "name": "Baumarkt"}])
                 self._reply(outer.items)
 
             def do_POST(self):
@@ -215,3 +221,60 @@ def test_shopping_tool_refuses_plain_http_to_other_hosts(monkeypatch):
     monkeypatch.setenv("SUPERMARKT_KITCHENOWL_LIST_ID", "1")
     assert not mcp_server.register_shopping_tool()
     monkeypatch.delenv("SUPERMARKT_KITCHENOWL_URL")
+
+
+@pytest.fixture
+def settings_file(tmp_path, monkeypatch):
+    from supermarkt import config
+    monkeypatch.setattr(config, "KITCHENOWL_FILE", tmp_path / "kitchenowl.json")
+    for name in ("URL", "TOKEN", "LIST_ID"):
+        monkeypatch.delenv(f"SUPERMARKT_KITCHENOWL_{name}", raising=False)
+    monkeypatch.delenv("SUPERMARKT_API_KEY", raising=False)
+    yield tmp_path / "kitchenowl.json"
+    mcp_server.register_shopping_tool()
+
+
+def test_settings_page_saves_token_privately_and_enables_the_tool(settings_file):
+    fake = _FakeKitchenOwl()
+    try:
+        client = TestClient(app)
+        assert client.get("/settings").status_code == 200
+        assert client.get("/api/v1/kitchenowl").json()["configured"] is False
+        lists = client.post("/api/v1/kitchenowl/lists", json={"url": fake.url, "token": "test-token"}).json()["lists"]
+        assert lists == [{"id": "7", "label": "Haus · Einkauf"}, {"id": "8", "label": "Haus · Baumarkt"}]
+        saved = client.put("/api/v1/kitchenowl", json={"url": fake.url, "token": "test-token", "list_id": "8"}).json()
+        assert saved["configured"] and saved["list_label"] == "Haus · Baumarkt"
+        assert "test-token" not in client.get("/api/v1/kitchenowl").text
+        assert (settings_file.stat().st_mode & 0o777) == 0o600
+        names = [tool.name for tool in asyncio.run(_tools())]
+        assert "add_to_shopping_list" in names
+        assert call("add_to_shopping_list", {"item": "Milch", "retailer": "Lidl"}).structured_content["added"] is False
+        assert client.delete("/api/v1/kitchenowl").json()["configured"] is False
+        assert "add_to_shopping_list" not in [tool.name for tool in asyncio.run(_tools())]
+    finally:
+        fake.close()
+
+
+async def _tools():
+    async with Client(mcp_server.mcp) as client:
+        return (await client.list_tools()).tools
+
+
+def test_settings_reject_wrong_token_unknown_list_and_plain_http(settings_file):
+    fake = _FakeKitchenOwl()
+    try:
+        client = TestClient(app)
+        assert client.post("/api/v1/kitchenowl/lists", json={"url": fake.url, "token": "falsch"}).status_code == 502
+        assert client.put("/api/v1/kitchenowl", json={"url": fake.url, "token": "test-token", "list_id": "99"}).status_code == 422
+        assert client.post("/api/v1/kitchenowl/lists", json={"url": "http://kitchenowl.example.test", "token": "x"}).status_code == 502
+        assert client.post("/api/v1/kitchenowl/lists", json={"url": "https://user:pw@kitchenowl.example.test", "token": "x"}).status_code == 502
+        assert not settings_file.exists()
+    finally:
+        fake.close()
+
+
+def test_settings_need_the_admin_key_when_one_is_configured(settings_file, monkeypatch):
+    monkeypatch.setenv("SUPERMARKT_API_KEY", "admin-for-test")
+    client = TestClient(app)
+    assert client.get("/api/v1/kitchenowl").status_code == 401
+    assert client.get("/api/v1/kitchenowl", headers={"Authorization": "Bearer admin-for-test"}).status_code == 200

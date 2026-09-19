@@ -1,0 +1,65 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#116149"><script src="/static/theme.js"></script><title>Korbuino – Einstellungen</title><link rel="stylesheet" href="/static/results.css"><style>
+.settingsPage{max-width:34rem;margin:0 auto;padding:1rem}
+.settingsPage label{display:block;margin:.9rem 0 .25rem;font-weight:600}
+.settingsPage input,.settingsPage select{width:100%;box-sizing:border-box;padding:.6rem;font:inherit;border:1px solid #8886;border-radius:.5rem;background:transparent;color:inherit}
+.settingsPage .row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1rem}
+.settingsPage button{padding:.6rem 1rem;font:inherit;border:0;border-radius:2rem;background:#116149;color:#fff;cursor:pointer}
+.settingsPage button.plain{background:transparent;color:inherit;border:1px solid #8886}
+.settingsPage .hint{opacity:.75;font-size:.9rem;margin:.3rem 0}
+#msg{margin-top:1rem;font-weight:600}
+</style></head><body><main class="settingsPage"><header class="titlebar"><h1>Korb<span style="color:var(--accent)">uino</span> · Einstellungen</h1><div class="titleActions"><a class="newSearch" href="/">Angebote suchen</a></div></header>
+<h2>KitchenOwl</h2>
+<p class="hint">Damit kann ein KI-Assistent über den MCP-Server Artikel auf deine KitchenOwl-Einkaufsliste setzen. Der Token wird nur auf dem Server gespeichert und nie wieder angezeigt.</p>
+<p id="state" class="hint"></p>
+<div id="adminBox" hidden><label for="admin">Admin-Schlüssel des Servers</label><input id="admin" type="password" autocomplete="off"><p class="hint">Der Server ist mit einem Schlüssel geschützt. Er wird nur in diesem Tab gemerkt.</p></div>
+<label for="url">KitchenOwl-Adresse (https)</label><input id="url" type="url" placeholder="https://kitchenowl.example.net" autocomplete="off">
+<label for="token">Token</label><input id="token" type="password" autocomplete="off" placeholder="leer lassen, um den gespeicherten zu behalten">
+<div class="row"><button id="load" type="button">Listen laden</button></div>
+<label for="list">Einkaufsliste</label><select id="list"><option value="">– erst Listen laden –</option></select>
+<div class="row"><button id="save" type="button">Speichern</button><button id="remove" class="plain" type="button">Entfernen</button></div>
+<p id="msg" role="status"></p>
+<script>
+const $ = id => document.getElementById(id);
+const key = () => { try { return sessionStorage.getItem("korbuinoAdmin") || ""; } catch { return ""; } };
+async function api(method, body) {
+  const headers = {"Content-Type": "application/json"};
+  const k = $("admin").value.trim() || key();
+  if (k) { headers.Authorization = "Bearer " + k; try { sessionStorage.setItem("korbuinoAdmin", k); } catch {} }
+  const path = method === "POST" ? "/api/v1/kitchenowl/lists" : "/api/v1/kitchenowl";
+  const response = await fetch(path, {method: method === "POST" ? "POST" : method, headers, body: body ? JSON.stringify(body) : undefined});
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Fehler " + response.status);
+  return data;
+}
+function show(text, bad) { $("msg").textContent = text; $("msg").style.color = bad ? "#b3261e" : ""; }
+function render(s) {
+  $("adminBox").hidden = !s.auth_required;
+  $("state").textContent = s.configured ? "Verbunden mit " + s.url + " · Liste: " + (s.list_label || s.list_id) : "Noch nicht eingerichtet.";
+  if (s.url && !$("url").value) $("url").value = s.url;
+  if (s.configured) { $("list").innerHTML = ""; $("list").add(new Option(s.list_label || s.list_id, s.list_id)); }
+}
+async function refresh() {
+  try { render(await api("GET")); } catch (e) {
+    if (/Bearer|Admin|401|Schlüssel/i.test(e.message)) { $("adminBox").hidden = false; show("Bitte den Admin-Schlüssel eintragen und neu laden.", true); } else show(e.message, true);
+  }
+}
+$("load").onclick = async () => {
+  try {
+    const {lists} = await api("POST", {url: $("url").value, token: $("token").value});
+    $("list").innerHTML = "";
+    lists.forEach(l => $("list").add(new Option(l.label, l.id)));
+    show(lists.length + " Liste(n) gefunden. Wähle eine und speichere.");
+  } catch (e) { show(e.message, true); }
+};
+$("save").onclick = async () => {
+  try {
+    render(await api("PUT", {url: $("url").value, token: $("token").value, list_id: $("list").value}));
+    $("token").value = ""; show("Gespeichert.");
+  } catch (e) { show(e.message, true); }
+};
+$("remove").onclick = async () => {
+  if (!confirm("KitchenOwl-Verbindung und Token vom Server löschen?")) return;
+  try { render(await api("DELETE")); $("list").innerHTML = ""; show("Entfernt."); } catch (e) { show(e.message, true); }
+};
+refresh();
+</script></main></body></html>

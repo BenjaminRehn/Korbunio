@@ -9,8 +9,11 @@
   (`SUPERMARKT_MCP_NEW_POSTAL_CODES_PER_10MIN`).
 - MCP: Neues, optionales Werkzeug `add_to_shopping_list`. Ein Assistent kann einen Fund
   („Schmelzkäse bei Kaufland, 1,59 €“) auf die KitchenOwl-Einkaufsliste setzen. Es gibt
-  das Werkzeug nur, wenn `SUPERMARKT_KITCHENOWL_URL`, `..._TOKEN` und `..._LIST_ID`
-  gesetzt sind; es legt nur an und überspringt Artikel, die schon auf der Liste stehen.
+  das Werkzeug nur, wenn KitchenOwl eingerichtet ist, und es legt nur an (Artikel, die
+  schon auf der Liste stehen, werden übersprungen).
+- Neue Seite `/settings`: KitchenOwl-Adresse und Token eintragen, Liste wählen. Der Token
+  liegt nur auf dem Server (Datei mit Rechten 0600) und wird nie wieder angezeigt; mit
+  gesetztem Admin-Schlüssel verlangt die Seite ihn. Umgebungsvariablen gehen weiterhin.
 - Kaufland: Die Gültigkeit steht im deutschen Format (17.09.2026 bis 23.09.2026) statt
   als ISO-Datum, in der Ergebnisliste und im MCP.
 - Native App: Der KitchenOwl-Abgleich entfernt Artikel wieder, die aus der Korbuino-Liste
