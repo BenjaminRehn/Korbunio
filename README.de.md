@@ -212,7 +212,7 @@ Eine LLM kann davor oder dahinter eingesetzt werden, etwa für natürlichsprachl
 
 ## MCP-Server für KI-Assistenten
 
-Der Server bringt unter `/mcp` (Streamable HTTP) einen MCP-Server mit. Ein KI-Assistent kann damit fragen „Wo ist Hochland Schmelzkäse im Angebot?“ und bekommt Händler, Preis ohne Bonusprogramm, Preis mit Bonusprogramm (wo die Daten einen Vorteil beziffern) und bis zu drei Bilder. Nur Lesen.
+Der Server bringt unter `/mcp` (Streamable HTTP) einen MCP-Server mit. Ein KI-Assistent kann damit fragen „Wo ist Hochland Schmelzkäse im Angebot?“ und bekommt Händler, Preis ohne Bonusprogramm, Preis mit Bonusprogramm (wo die Daten einen Vorteil beziffern) und ein Bild (bis zu drei mit `max_images`). Nur Lesen.
 
 - Werkzeuge: `find_offers`, `list_retailers`, `list_bonus_programs`.
 - Adresse in der MCP-Konfiguration des Clients: `https://<dein-server>/mcp`. Ist `SUPERMARKT_API_KEY` gesetzt, muss der Client `Authorization: Bearer <Schlüssel>` senden; sonst ist der Zugang offen wie der Rest des Servers.

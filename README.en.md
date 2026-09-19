@@ -193,7 +193,7 @@ A local LLM can still use Korbuino, for example for an automatic Monday report t
 
 ## MCP server for AI assistants
 
-The server ships an MCP server at `/mcp` (Streamable HTTP). An assistant can ask "where is Hochland cream cheese on offer?" and gets the retailer, the price without a loyalty programme, the price with one (where the data quantifies a benefit) and up to three images. Read-only.
+The server ships an MCP server at `/mcp` (Streamable HTTP). An assistant can ask "where is Hochland cream cheese on offer?" and gets the retailer, the price without a loyalty programme, the price with one (where the data quantifies a benefit) and one image (up to three with `max_images`). Read-only.
 
 - Tools: `find_offers`, `list_retailers`, `list_bonus_programs`.
 - Client configuration: `https://<your-server>/mcp`. If `SUPERMARKT_API_KEY` is set, the client must send `Authorization: Bearer <key>`; otherwise access is open like the rest of the server.

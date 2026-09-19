@@ -40,6 +40,8 @@ log = logging.getLogger(__name__)
 # So lange wartet eine Frage auf das Laden, bevor sie um Geduld bittet.
 LOAD_DEADLINE_SECONDS = float(os.environ.get("SUPERMARKT_MCP_DEADLINE_SECONDS", "45"))
 MAX_IMAGES = 3
+# Neue Postleitzahlen (Kaltladen) pro 10 Minuten; schützt den Server vor Dauerabfragen.
+NEW_POSTAL_CODE_LIMIT = int(os.environ.get("SUPERMARKT_MCP_NEW_POSTAL_CODES_PER_10MIN", "10"))
 # Zwischenspeicher: Ergebnisse dieser PLZ werden alle 25 Minuten frisch gehalten, solange gefragt wird.
 WARM_INTERVAL_SECONDS = 25 * 60
 WARM_WHILE_USED_SECONDS = 6 * 3600
@@ -83,6 +85,7 @@ mcp = MCPServer("korbuino", instructions=INSTRUCTIONS)
 _inflight: dict[tuple, asyncio.Task] = {}
 _last_used: dict[str, float] = {}
 _warm_started = False
+_new_postal_codes: list[float] = []
 
 
 # ---- laden -------------------------------------------------------------------------------
@@ -109,8 +112,19 @@ def _load_snapshot(plz: str, retailers: tuple[str, ...], refresh: bool = False) 
     return snapshot
 
 
+def _check_new_postal_code(plz: str) -> None:
+    if plz in _last_used:
+        return
+    now = time.time()
+    _new_postal_codes[:] = [t for t in _new_postal_codes if now - t < 600]
+    if len(_new_postal_codes) >= NEW_POSTAL_CODE_LIMIT:
+        raise ValueError("Zu viele verschiedene Postleitzahlen in kurzer Zeit. Bitte in ein paar Minuten noch einmal fragen.")
+    _new_postal_codes.append(now)
+
+
 async def _snapshot(plz: str, retailers: tuple[str, ...], ctx: Context | None = None) -> dict[str, Any]:
     """Angebote laden, mit Frist. Ein begonnenes Laden läuft weiter und wird gemeinsam genutzt."""
+    _check_new_postal_code(plz)
     _last_used[plz] = time.time()
     _start_warmup()
     key = (plz, retailers)
@@ -196,6 +210,16 @@ def _offers_from(snapshot: dict[str, Any], product: str, also_search: list[str] 
     return result
 
 
+def _search_variants(product: str) -> list[str]:
+    """Einzelwörter und gekürzte Beugungsformen („Joghurts“ → „Joghurt“), wenn die ganze Wortgruppe nichts findet."""
+    variants: list[str] = []
+    for word in re.findall(r"[\wäöüß-]{3,}", product, flags=re.IGNORECASE):
+        for form in (word, word[:-1] if word.lower().endswith(("s", "n", "e")) else "", word[:-2] if word.lower().endswith(("en", "er")) else ""):
+            if len(form) >= 4 and form.lower() != product.lower() and form not in variants:
+                variants.append(form)
+    return variants
+
+
 def _image_block(offer: Offer) -> ImageContent | None:
     """Bild des Angebots über den Bilddienst des Servers (Adressprüfung, Zwischenspeicher, Größenlimit)."""
     if not offer.image_url:
@@ -246,6 +270,7 @@ async def find_offers(
     also_search: list[str] | None = None,
     limit: int = 8,
     with_images: bool = True,
+    max_images: int = 1,
     ctx: Context | None = None,
 ) -> CallToolResult:
     """Wo ist ein Produkt gerade im Angebot? Liefert Händler und Preis ohne und, falls vorhanden, mit Bonusprogramm.
@@ -256,7 +281,8 @@ async def find_offers(
         retailers: Nur diese Händler, z. B. ["Kaufland", "REWE"]. Leer = alle. Gültige Namen liefert list_retailers.
         also_search: Weitere Suchbegriffe für dieselbe Frage (ODER), z. B. Synonyme oder Schreibweisen.
         limit: Höchstens so viele Treffer, die günstigsten zuerst (1 bis 25).
-        with_images: Bilder der ersten drei Treffer mitschicken.
+        with_images: Bilder der ersten Treffer mitschicken.
+        max_images: Wie viele Bilder (0 bis 3, Standard 1); jedes Bild kostet Kontext.
     """
     if not product.strip():
         raise ValueError("Bitte sage, welches Produkt gesucht wird.")
@@ -268,13 +294,21 @@ async def find_offers(
     except StillLoading:
         return _waiting_result(plz, product)
     offers = await asyncio.to_thread(_offers_from, snapshot, product.strip(), also_search, wanted)
+    widened = False
+    if not offers:
+        variants = _search_variants(product)
+        if variants:
+            offers = await asyncio.to_thread(_offers_from, snapshot, product.strip(), [*(also_search or []), *variants], wanted)
+            widened = bool(offers)
     result = OfferResult(postal_code=plz, query=product.strip(), found=len(offers), offers=offers[:limit])
     if not result.offers:
         text = f"Keine Angebote für „{result.query}“ bei der Postleitzahl {plz} gefunden. Versuche einen anderen Begriff oder Synonyme (also_search)."
         return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=result.model_dump())
     content: list[TextContent | ImageContent] = [TextContent(type="text", text=_summary(result))]
-    if with_images:
-        shown = [offer for offer in result.offers if offer.image_url][:MAX_IMAGES]
+    if widened:
+        content[0].text += "\n(Nichts mit genau diesem Begriff; gezeigt sind ähnliche Treffer zu einzelnen Wörtern.)"
+    if with_images and max_images > 0:
+        shown = [offer for offer in result.offers if offer.image_url][:min(max_images, MAX_IMAGES)]
         blocks = await asyncio.gather(*(asyncio.to_thread(_image_block, offer) for offer in shown))
         for offer, block in zip(shown, blocks, strict=True):
             if block is not None:

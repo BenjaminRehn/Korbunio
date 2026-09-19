@@ -1,3 +1,17 @@
+# 0.1.44
+
+## MCP-Feinschliff, Kaufland-Datum, Deploy-Skript
+
+- MCP: Findet die Suche nichts, versucht sie es mit den Einzelwörtern und gekürzten
+  Formen und sagt das in der Antwort. `find_offers` schickt standardmäßig ein Bild
+  (`max_images` 0 bis 3), damit die Antwort den Kontext des Assistenten nicht füllt.
+  Neue Postleitzahlen sind auf 10 je 10 Minuten begrenzt
+  (`SUPERMARKT_MCP_NEW_POSTAL_CODES_PER_10MIN`).
+- Kaufland: Die Gültigkeit steht im deutschen Format (17.09.2026 bis 23.09.2026) statt
+  als ISO-Datum, in der Ergebnisliste und im MCP.
+- `deploy-vm.sh`: ein Befehl, der das Image aus dem GitHub-Tag baut, das alte als
+  Rollback sichert und neu startet (`./deploy-vm.sh 0.1.44`, zurück mit `--rollback`).
+
 # 0.1.43
 
 ## MCP-Server für KI-Assistenten

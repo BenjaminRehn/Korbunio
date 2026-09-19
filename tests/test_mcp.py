@@ -37,6 +37,8 @@ def fake_runtime(monkeypatch):
     monkeypatch.setattr(mcp_server, "_load_snapshot", lambda plz, retailers, refresh=False: {"plz": plz})
     monkeypatch.setenv("SUPERMARKT_MCP_WARMUP", "0")
     mcp_server._inflight.clear()
+    mcp_server._last_used.clear()
+    mcp_server._new_postal_codes.clear()
 
 
 def call(name, arguments):
@@ -56,6 +58,31 @@ def test_find_offers_lists_cheapest_first_with_bonus_price_and_image():
     assert "1,59 € mit Kaufland Card" in text and "gültig gültig" not in text
     assert "gültig 17.09.2026 bis 23.09.2026" in text and "Kaufland, gültig" not in text
     assert [block.type for block in result.content].count("image") == 1
+
+
+def test_only_one_image_by_default_and_up_to_three_on_request():
+    assert [b.type for b in call("find_offers", {"product": "x", "postal_code": "01067"}).content].count("image") == 1
+    result = call("find_offers", {"product": "x", "postal_code": "01067", "max_images": 0})
+    assert all(block.type == "text" for block in result.content)
+
+
+def test_search_widens_to_single_words_when_nothing_matches(monkeypatch):
+    class Picky(FakeEngine):
+        def page(self, snapshot, loyalty_programs=(), keywords=(), **kwargs):
+            if not keywords:
+                return {"offers": [], "available_loyalty_programs": []}
+            return super().page(snapshot, loyalty_programs=loyalty_programs, **kwargs)
+    monkeypatch.setattr(runtime, "get_engine", lambda: Picky())
+    result = call("find_offers", {"product": "Schmelzkäses", "postal_code": "01067", "with_images": False})
+    assert result.structured_content["found"] == 2 and "ähnliche Treffer" in result.content[0].text
+
+
+def test_too_many_new_postal_codes_are_refused(monkeypatch):
+    monkeypatch.setattr(mcp_server, "NEW_POSTAL_CODE_LIMIT", 2)
+    assert not call("find_offers", {"product": "x", "postal_code": "01067", "with_images": False}).is_error
+    assert not call("find_offers", {"product": "x", "postal_code": "01069", "with_images": False}).is_error
+    assert call("find_offers", {"product": "x", "postal_code": "01097", "with_images": False}).is_error
+    assert not call("find_offers", {"product": "x", "postal_code": "01067", "with_images": False}).is_error
 
 
 def test_find_offers_without_images_and_with_limit():
