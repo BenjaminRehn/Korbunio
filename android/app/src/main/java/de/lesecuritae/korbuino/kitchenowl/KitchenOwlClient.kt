@@ -27,12 +27,18 @@ class KitchenOwlClient(
         check(token.isNotBlank()) { "KitchenOwl-Token fehlt" }
     }
 
-    private fun call(path: String, body: JsonObject? = null): JsonElement {
+    private fun call(path: String, body: JsonObject? = null, method: String = if (body != null) "POST" else "GET"): JsonElement {
         checkSecure()
         val request = Request.Builder().url(baseUrl.trimEnd('/') + path)
             .header("Authorization", "Bearer $token")
             .header("Accept", "application/json")
-            .apply { if (body != null) post(json.encodeToString(JsonObject.serializer(), body).toRequestBody(mediaType)) }
+            .apply {
+                val payload = body?.let { json.encodeToString(JsonObject.serializer(), it).toRequestBody(mediaType) }
+                when (method) {
+                    "POST" -> post(payload!!)
+                    "DELETE" -> delete(payload)
+                }
+            }
             .build()
         http.newCall(request).execute().use { response ->
             check(response.isSuccessful) { "KitchenOwl HTTP ${response.code}" }
@@ -79,5 +85,38 @@ class KitchenOwlClient(
             item["name"]?.toString()?.trim('"')?.trim()?.takeIf(String::isNotBlank)
                 ?: (item["item"] as? JsonObject)?.get("name")?.toString()?.trim('"')?.trim()?.takeIf(String::isNotBlank)
         }.toSet()
+    }
+
+    /** Article name (trimmed, lower case) to KitchenOwl item id for everything currently on the list. */
+    fun itemIds(listId: String): Map<String, String> {
+        require(listId.all(Char::isDigit)) { "Ungültige KitchenOwl-Listen-ID" }
+        val values = call("/api/shoppinglist/$listId/items") as? JsonArray ?: return emptyMap()
+        val result = LinkedHashMap<String, String>()
+        values.forEach { value ->
+            val item = value as? JsonObject ?: return@forEach
+            val id = item["id"]?.toString()?.trim('"')?.takeIf { it.isNotBlank() && it.all(Char::isDigit) } ?: return@forEach
+            val name = item["name"]?.toString()?.trim('"')?.trim()?.lowercase()?.takeIf(String::isNotBlank) ?: return@forEach
+            result.putIfAbsent(name, id)
+        }
+        return result
+    }
+
+    fun removeItem(listId: String, itemId: String) {
+        require(listId.all(Char::isDigit) && itemId.all(Char::isDigit)) { "Ungültige KitchenOwl-ID" }
+        call("/api/shoppinglist/$listId/item", buildJsonObject { put("item_id", itemId.toInt()) }, method = "DELETE")
+    }
+}
+
+/**
+ * What a sync has to do. Only articles Korbuino itself put on the list earlier are ever removed
+ * ([previouslySynced]); anything a person added in KitchenOwl stays untouched.
+ */
+object KitchenOwlSyncPlan {
+    data class Plan(val toAdd: Set<String>, val toRemove: Set<String>, val nowSynced: Set<String>)
+
+    fun plan(local: Set<String>, previouslySynced: Set<String>, remote: Set<String>): Plan {
+        val toAdd = local - remote
+        val toRemove = (previouslySynced - local).intersect(remote)
+        return Plan(toAdd, toRemove, (previouslySynced.intersect(local)) + toAdd)
     }
 }

@@ -21,6 +21,7 @@ import de.lesecuritae.korbuino.providers.RetailerProvider
 import de.lesecuritae.korbuino.providers.ServerFallbackProvider
 import de.lesecuritae.korbuino.providers.ServerProvider
 import de.lesecuritae.korbuino.kitchenowl.KitchenOwlClient
+import de.lesecuritae.korbuino.kitchenowl.KitchenOwlSyncPlan
 import de.lesecuritae.korbuino.kitchenowl.KitchenOwlTarget
 import de.lesecuritae.korbuino.security.SecureStore
 import de.lesecuritae.korbuino.images.ProductImageProvider
@@ -39,6 +40,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+private data class SyncResult(val added: Int, val removed: Int, val total: Int, val label: String)
 
 data class MainUiState(
     val postalCode: String = "",
@@ -276,32 +279,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runCatching {
                 val client = KitchenOwlClient(url, token)
                 withContext(Dispatchers.IO) {
-                    // KitchenOwl synchronisation is intentionally idempotent:
-                    // do not add an article that is already on the target list.
-                    val existing = client.existingItems(target.id).map { it.trim().lowercase() }.toMutableSet()
-                    var added = 0
-                    var total = 0
+                    // Idempotent: nothing is added twice, and articles removed from the Korbuino list are
+                    // removed again in KitchenOwl, but only ones Korbuino put there itself.
+                    val remote = client.itemIds(target.id)
+                    val notes = LinkedHashMap<String, Pair<String, String>>()
                     database.shoppingListDao().allItems().forEach { item ->
                         val product = database.productDao().find(listOf(item.productId)).firstOrNull()
                         val name = product?.name?.trim().orEmpty()
                         if (name.isBlank()) return@forEach
-                        total++
-                        if (existing.add(name.lowercase())) {
-                            // The retailer the article was entered for travels in the note.
-                            val note = listOf("Menge: ${item.quantity}", item.note.takeIf { it.isNotBlank() }?.let { "bei $it" })
-                                .filterNotNull().joinToString(" · ")
-                            client.addItem(target.id, name, note)
-                            added++
-                        }
+                        // The retailer the article was entered for travels in the note.
+                        val note = listOf("Menge: ${item.quantity}", item.note.takeIf { it.isNotBlank() }?.let { "bei $it" })
+                            .filterNotNull().joinToString(" · ")
+                        notes.putIfAbsent(name.lowercase(), name to note)
                     }
-                    Triple(added, total, target.label)
+                    val syncedKey = "kitchenowl_synced_${target.id}"
+                    val previous = secureStore.get(syncedKey).orEmpty().split('\n').filter(String::isNotBlank).toSet()
+                    val plan = KitchenOwlSyncPlan.plan(notes.keys, previous, remote.keys)
+                    plan.toAdd.forEach { key -> notes.getValue(key).let { (name, note) -> client.addItem(target.id, name, note) } }
+                    plan.toRemove.forEach { key -> remote[key]?.let { client.removeItem(target.id, it) } }
+                    secureStore.put(syncedKey, plan.nowSynced.joinToString("\n"))
+                    val added = plan.toAdd.size
+                    val total = notes.size
+                    SyncResult(added, plan.toRemove.size, total, target.label)
                 }
-            }.onSuccess { (added, total, label) ->
+            }.onSuccess { (added, removed, total, label) ->
                 _state.value = _state.value.copy(
                     message = when {
-                        total == 0 -> "Die Einkaufsliste ist leer, nichts zu übertragen"
-                        added == 0 -> "Alle $total Artikel sind schon auf $label"
-                        else -> "$added Artikel zu $label übertragen"
+                        total == 0 && removed == 0 -> "Die Einkaufsliste ist leer, nichts zu übertragen"
+                        added == 0 && removed == 0 -> "Alle $total Artikel sind schon auf $label"
+                        else -> listOfNotNull("$added Artikel zu $label übertragen".takeIf { added > 0 }, "$removed entfernt".takeIf { removed > 0 }).joinToString(", ")
                     },
                 )
             }

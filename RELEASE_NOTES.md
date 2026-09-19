@@ -9,6 +9,9 @@
   (`SUPERMARKT_MCP_NEW_POSTAL_CODES_PER_10MIN`).
 - Kaufland: Die Gültigkeit steht im deutschen Format (17.09.2026 bis 23.09.2026) statt
   als ISO-Datum, in der Ergebnisliste und im MCP.
+- Native App: Der KitchenOwl-Abgleich entfernt Artikel wieder, die aus der Korbuino-Liste
+  gelöscht wurden, aber nur solche, die Korbuino selbst dorthin gelegt hat. Was jemand von
+  Hand in KitchenOwl hinzugefügt hat, bleibt unberührt.
 - `deploy-vm.sh`: ein Befehl, der das Image aus dem GitHub-Tag baut, das alte als
   Rollback sichert und neu startet (`./deploy-vm.sh 0.1.44`, zurück mit `--rollback`).
 
