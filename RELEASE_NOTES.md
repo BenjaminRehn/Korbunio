@@ -1,3 +1,24 @@
+# 0.1.38
+
+## Mehrere Händler wählen und Korrekturen
+
+- Die Händlerauswahl der nativen App hat Kontrollkästchen: Es lassen sich
+  mehrere Händler gleichzeitig laden (zum Beispiel nur REWE und dm), „Alle
+  Händler“ hebt die Auswahl auf. Die tägliche Aktualisierung lädt dieselbe
+  Auswahl. Eine früher gespeicherte Einzelauswahl bleibt gültig (Issue #43).
+- KitchenOwl in der nativen App: Der Händler, bei dem ein Artikel eingetragen
+  wurde, steht jetzt in der KitchenOwl-Notiz („Menge: 1 · bei dm“). Die Meldung
+  nennt, wie viele Artikel übertragen wurden, und behauptet bei leerer oder
+  schon übertragener Liste keine Übertragung mehr.
+- KitchenOwl in der Flutter-App: Aus „GUT & GÜNSTIG - Kaiserbrötchen“ wurde der
+  Artikel „& - Kaiserbrötchen“. Zeichen ohne Buchstaben oder Ziffern bleiben
+  jetzt aus dem Artikelnamen heraus.
+- Die Bestätigungsseite für EDEKA stürzte auf Android 8 bis 10 ab, weil sie
+  `WindowInsets.CONSUMED` (ab Android 11) benutzte. Behoben.
+- Der Prüflauf der nativen App in GitHub Actions lief seit dem
+  Einrichtungsschritt für das Android-SDK nie durch und ist repariert
+  (SDK des Runners, Android-Lint wieder aktiv).
+
 # 0.1.37
 
 ## Einkaufsliste mit Angebotssuche, Serveranbindung und einheitlicher Name
