@@ -2,8 +2,45 @@
 
 from __future__ import annotations
 
+import re
 import threading
 import time
+from urllib.parse import urlsplit
+
+_CURL_URL = re.compile(r"""curl\s+(?:-\S+\s+)*(['"])(https?://[^'"]+)\1""", re.IGNORECASE)
+_CURL_HEADER = re.compile(r"""(?:-H|--header)\s+(['"])\s*cookie\s*:\s*(.*?)\1""", re.IGNORECASE)
+_CURL_COOKIE = re.compile(r"""(?:-b|--cookie)\s+(['"])(.*?)\1""", re.IGNORECASE)
+_HEADER_LINE = re.compile(r"^\s*cookie\s*:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+
+
+def extract_cookie_header(text: str) -> str:
+    """Return the cookie header out of what the user pasted.
+
+    Accepts the bare header value, a "Cookie: ..." line, a block of request
+    headers, or a request copied as cURL from the browser's network tab.
+    Nothing but the cookie is taken over, so other headers of a copied request
+    (authorization, user agent, ...) are dropped here. A copied cURL request
+    must have gone to mueller.de, otherwise a cookie of another site could end
+    up being sent to Müller.
+    """
+    raw = str(text or "")
+    if "\n" not in raw.strip() and "curl" not in raw[:8].lower():
+        return raw.strip()
+    url = _CURL_URL.search(raw)
+    if url:
+        host = (urlsplit(url.group(2)).hostname or "").lower()
+        if host != "mueller.de" and not host.endswith(".mueller.de"):
+            raise ValueError("Die kopierte Anfrage ging nicht an mueller.de")
+    for pattern in (_CURL_HEADER, _CURL_COOKIE):
+        found = pattern.search(raw)
+        if found:
+            return found.group(2).strip()
+    found = _HEADER_LINE.search(raw)
+    if found:
+        return found.group(1).strip()
+    if url or "\n" in raw.strip():
+        raise ValueError("In der eingefügten Anfrage steht kein Cookie")
+    return raw.strip()
 
 
 class MuellerSessionStore:
@@ -23,7 +60,7 @@ class MuellerSessionStore:
         self._lock = threading.Lock()
 
     def set(self, cookie: str) -> None:
-        value = str(cookie or "").strip()
+        value = extract_cookie_header(cookie)
         if not value or len(value) > self.MAX_COOKIE_LENGTH or any(char in value for char in "\r\n"):
             raise ValueError("Ungültige Müller-Session")
         # Browsers show the header as "cookie: a=b"; a copied name is not part of the value.

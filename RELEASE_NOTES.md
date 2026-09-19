@@ -1,3 +1,19 @@
+# 0.1.39
+
+## Müller-Sitzung am Server einfacher übergeben
+
+- Die Müller-Bestätigungsseite nimmt jetzt auch eine im Browser als cURL
+  kopierte Anfrage an (Rechtsklick auf die Anfrage im Reiter „Netzwerk“ →
+  Kopieren → „Als cURL“). Der Server übernimmt daraus nur den Cookie und
+  verwirft alle anderen Header. Ging die kopierte Anfrage nicht an
+  mueller.de, wird sie abgelehnt, damit kein Cookie einer fremden Seite an
+  Müller gesendet wird. Der bloße Cookie-Header und eine Zeile „Cookie: …“
+  funktionieren weiter.
+- Die Anleitung sagt ausdrücklich, dass die Entwicklerwerkzeuge im Müller-Tab
+  zu öffnen sind (die Netzwerkanalyse zeigt nur den eigenen Tab), und weist
+  darauf hin, einen Werbeblocker wie uBlock für mueller.de auszuschalten,
+  weil sonst die Prüfung nicht bestehen kann.
+
 # 0.1.38
 
 ## Mehrere Händler wählen und Korrekturen
