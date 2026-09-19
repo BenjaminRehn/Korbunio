@@ -101,3 +101,40 @@ def test_kaufland_category_headings_do_not_truncate_weekly_grid():
     assert '/a' in section
     assert '/b' in section
     assert '/duplicate' not in section
+
+
+def test_kaufland_prices_follow_the_store_region_through_the_variant_cookie(monkeypatch):
+    """Kaufland shows regional prices: the same article costs 1.59 in one store and 1.79 in another."""
+    def structured_for(price):
+        raw_offers = [{
+            "offerId": f"ART.{index}_KAV.{price}", "klNr": str(index), "dateFrom": "2026-09-17",
+            "dateTo": "2026-09-23", "title": f"Produkt {index}", "price": price,
+            "formattedPrice": f"{price:.2f}", "unit": "je 100-g-Packg.", "formattedBasePrice": "(1 kg = 14.90)",
+        } for index in range(100)]
+        return {"component": "OfferTemplate", "props": {"offerData": {"cycles": [{
+            "categories": [{"displayName": "Test", "offers": raw_offers}],
+        }]}}}
+
+    regional_prices = {"DE4330": 1.59, "DE2543": 1.79}
+    sent_cookies = []
+
+    class Http:
+        def get_bytes(self, url, headers=None):
+            if ".kloffers." in url:
+                return json.dumps([{"klNr": str(i), "dateFrom": "2026-09-17", "dateTo": "2026-09-23"} for i in range(100)]).encode()
+            cookie = (headers or {}).get("Cookie", "")
+            sent_cookies.append(cookie)
+            variant = cookie.split("x-aem-variant=", 1)[-1] if "x-aem-variant=" in cookie else ""
+            price = regional_prices.get(variant, 1.79)
+            return ("<script>window.SSR = " + json.dumps(structured_for(price), separators=(",", ":")) + ";</script>").encode()
+
+    monkeypatch.setattr("supermarkt.sources.kaufland.today_berlin", lambda: date(2026, 9, 19))
+    monkeypatch.setattr("supermarkt.common.today_berlin", lambda: date(2026, 9, 19))
+    source = OfficialKauflandSource(Http(), locator=None)
+
+    kamenz = source._load_structured_offers("https://filiale.kaufland.de/service/filiale/kamenz-4330.html")
+    essen = source._load_structured_offers("https://filiale.kaufland.de/service/filiale/essen-nordviertel-2543.html")
+
+    assert sent_cookies == ["x-aem-variant=DE4330", "x-aem-variant=DE2543"]
+    assert {offer.price for offer in kamenz} == {1.59}
+    assert {offer.price for offer in essen} == {1.79}

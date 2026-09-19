@@ -877,9 +877,14 @@ class OfficialKauflandSource:
             and clean_text(item.get("dateFrom")) <= reference <= clean_text(item.get("dateTo"))
         }
         overview_url = self._overview_url()
-        page = self.http.get_bytes(overview_url, {"Accept": "text/html,application/xhtml+xml"}).decode(
-            "utf-8", errors="replace"
-        )
+        # Kaufland prices differ by region. The site renders the overview for the
+        # store named in the "x-aem-variant" cookie (the store picker sets it in the
+        # browser); without it the page shows the default region, so a store in
+        # Sachsen or Berlin (1.59) would see the default price (1.79).
+        page = self.http.get_bytes(
+            overview_url,
+            {"Accept": "text/html,application/xhtml+xml", "Cookie": f"x-aem-variant={selector}"},
+        ).decode("utf-8", errors="replace")
         marker = '{"component":"OfferTemplate"'
         start = page.find(marker)
         if start < 0:
