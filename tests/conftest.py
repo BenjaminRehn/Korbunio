@@ -6,7 +6,7 @@ from supermarkt import runtime, security
 class FakeEngine:
     snapshot_data = {"search_id": "synthetic-link-test", "postal_code": "01067", "created_at": 0}
 
-    def snapshot(self, postal_code, aldi_region, refresh, retailers=(), rewe_market_id="", netto_market_id=""):
+    def snapshot(self, postal_code, aldi_region, refresh, retailers=(), rewe_market_id="", netto_market_id="", netto_scottie_market_id="", trinkgut_market_id=""):
         assert postal_code == "01067"
         return dict(self.snapshot_data), True
 
