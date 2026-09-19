@@ -128,7 +128,8 @@ class ChallengeActivity : Activity() {
                     )
                 }
                 view.setPadding(bars[0], bars[1], bars[2], bars[3])
-                WindowInsets.CONSUMED
+                // WindowInsets.CONSUMED only exists from API 30; older versions keep the insets.
+                if (Build.VERSION.SDK_INT >= 30) WindowInsets.CONSUMED else insets
             }
         })
         web.loadUrl(url)
