@@ -343,16 +343,23 @@ private fun OfferOverview(
     var categoryFilter by rememberSaveable { mutableStateOf("") }
     val collapsedGroups = remember { mutableStateListOf<String>() }
     val retailerNames = viewModel.retailers.toMap()
-    val presentRetailerIds = state.offers.map { it.offer.retailerId }.toSet()
+    // Only what the retailer menu selected is shown. Offers of earlier loads of other retailers stay
+    // stored but do not turn up in the list or the search (in server mode the server decides).
+    val menuSelection = RetailerSelection.parse(state.retailerId, viewModel.retailers.map { it.first })
+    val shownOffers = remember(state.offers, menuSelection, state.serverMode) {
+        if (menuSelection.isEmpty() || state.serverMode) state.offers
+        else state.offers.filter { it.offer.retailerId in menuSelection }
+    }
+    val presentRetailerIds = shownOffers.map { it.offer.retailerId }.toSet()
     val retailerIds = viewModel.retailers.map { it.first }.filter { it != "all" && it in presentRetailerIds } +
         presentRetailerIds.filter { it !in retailerNames }.sorted()
-    val retailerCounts = state.offers.groupingBy { it.offer.retailerId }.eachCount()
+    val retailerCounts = shownOffers.groupingBy { it.offer.retailerId }.eachCount()
     val retailerOptions = listOf("all" to "Alle Händler") + retailerIds.map { it to (retailerNames[it] ?: it) }
-    val groupOf = remember(state.offers) {
-        state.offers.associate { it.offer.id to ProductGroups.of(it.offer.categoryId, it.productName) }
+    val groupOf = remember(shownOffers) {
+        shownOffers.associate { it.offer.id to ProductGroups.of(it.offer.categoryId, it.productName) }
     }
     // The product-group tabs count what the retailer chip and the text filter leave, but not the tab itself.
-    val scopedOffers = state.offers
+    val scopedOffers = shownOffers
         .filter { display -> retailerFilter == "all" || display.offer.retailerId == retailerFilter }
         .filter { display ->
             offerFilter.isBlank() || display.productName.contains(offerFilter, ignoreCase = true) ||
@@ -390,10 +397,26 @@ private fun OfferOverview(
             if (group !in collapsedGroups) add(display)
         }
     }
-    val availableLoyaltyPrograms = state.offers.mapNotNull { display ->
+    val availableLoyaltyPrograms = shownOffers.mapNotNull { display ->
         val id = display.offer.loyaltyProgram ?: return@mapNotNull null
         id to (display.offer.loyaltyLabel ?: id)
     }.distinctBy { it.first }.sortedBy { it.second }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Items in front of the offer rows: search, retailer chips, sort, count, refresh row, message (+ optional rows).
+    val headerItems = 6 + (if (groupTabs.isNotEmpty()) 1 else 0) + (if (availableLoyaltyPrograms.isNotEmpty()) 2 else 0)
+    // What the fast scroller shows for the row under its handle, depending on the sort.
+    val scrollLabel: (Int) -> String = { index ->
+        when (val row = rows.getOrNull(index)) {
+            is String -> row
+            is OfferDisplay -> when (sortMode) {
+                "product" -> row.productName.trim().firstOrNull()?.uppercaseChar()?.takeIf { it.isLetter() }?.toString() ?: "#"
+                "retailer" -> retailerNames[row.offer.retailerId] ?: row.offer.retailerId
+                "category" -> groupOf[row.offer.id] ?: ProductGroups.OTHER
+                else -> effectivePriceCents(row.offer, state.selectedLoyaltyPrograms).let { "${it / 100},${(it % 100).toString().padStart(2, '0')} €" }
+            }
+            else -> ""
+        }
+    }
     Column(
         modifier = Modifier.padding(24.dp).fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -407,7 +430,7 @@ private fun OfferOverview(
             }
         }
         Text(
-            "${state.offers.size} Angebote · ${state.offers.map { it.offer.retailerId }.distinct().size} Händler",
+            "${shownOffers.size} Angebote · ${shownOffers.map { it.offer.retailerId }.distinct().size} Händler",
             style = MaterialTheme.typography.bodyMedium,
         )
         androidx.compose.material3.TabRow(selectedTabIndex = selectedTab) {
@@ -417,8 +440,10 @@ private fun OfferOverview(
         if (selectedTab == 1) {
             ShoppingListOverview(state = state, viewModel = viewModel)
         } else {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
             ) {
@@ -434,7 +459,7 @@ private fun OfferOverview(
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         items(retailerOptions) { (id, name) ->
-                            val count = if (id == "all") state.offers.size else retailerCounts[id] ?: 0
+                            val count = if (id == "all") shownOffers.size else retailerCounts[id] ?: 0
                             FilterChip(
                                 selected = retailerFilter == id,
                                 onClick = { retailerFilter = id },
@@ -573,6 +598,14 @@ private fun OfferOverview(
                     }
                   }
                 }
+            }
+            FastScroller(
+                listState = listState,
+                rowCount = rows.size,
+                headerCount = headerItems,
+                label = scrollLabel,
+                modifier = Modifier.align(androidx.compose.ui.Alignment.CenterEnd),
+            )
             }
         }
     }
