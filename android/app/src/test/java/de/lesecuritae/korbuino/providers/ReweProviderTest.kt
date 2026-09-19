@@ -99,4 +99,53 @@ class ReweProviderTest {
         assertEquals(11, result.offers.size)
         assertTrue(result.offers.all { it.retailerId == "rewe" })
     }
+
+    private fun marketPage(cards: Int): List<MockResponse> = listOf(
+        MockResponse().setBody("""<a href="/angebote/teststadt/123456/rewe-markt-hauptstrasse/">REWE Markt 12345 Teststadt</a>"""),
+        MockResponse().setBody((1..cards).joinToString("") { index ->
+            """
+            <div class="cor-offer-renderer-tile">
+              <div class="cor-offer-information__title">Direkt $index</div>
+              <span class="cor-offer-price__tag-price">1,29 €</span>
+            </div>
+            """
+        }),
+    )
+
+    private fun regionalSource(count: Int?) = object : RetailerProvider {
+        override val id = "marktguru-rewe"
+        override val displayName = "REWE (regional)"
+        override suspend fun fetch(request: RetailerRequest): ProviderResult {
+            if (count == null) error("regional nicht erreichbar")
+            return ProviderResult(
+                products = (1..count).map { ProductEntity("regional-product-$it", "Regionaler Treffer $it", normalizedKey = "regionaler-treffer-$it") },
+                offers = (1..count).map { OfferEntity("regional-offer-$it", id, "regional-product-$it", externalId = "regional-$it", priceCents = 199, sourceUrl = "https://example.test", cachedAt = 1) },
+            )
+        }
+    }
+
+    @Test fun `a market page with eleven offers does not hide the full regional list`() = runTest {
+        // Reported for 04209: the page showed 11 of about 200 offers.
+        marketPage(11).forEach(server::enqueue)
+        val provider = ReweProvider(OkHttpClient(), server.url("/").toString().trimEnd('/'), regionalSource(200))
+
+        val result = provider.fetch(RetailerRequest("12345", citySlug = "teststadt"))
+
+        assertEquals(200, result.offers.size)
+        assertTrue(result.offers.all { it.retailerId == "rewe" })
+    }
+
+    @Test fun `the market page wins when it has more offers than the regional source`() = runTest {
+        marketPage(30).forEach(server::enqueue)
+        val provider = ReweProvider(OkHttpClient(), server.url("/").toString().trimEnd('/'), regionalSource(12))
+
+        assertEquals(30, provider.fetch(RetailerRequest("12345", citySlug = "teststadt")).offers.size)
+    }
+
+    @Test fun `the market page is used when the regional source fails`() = runTest {
+        marketPage(11).forEach(server::enqueue)
+        val provider = ReweProvider(OkHttpClient(), server.url("/").toString().trimEnd('/'), regionalSource(null))
+
+        assertEquals(11, provider.fetch(RetailerRequest("12345", citySlug = "teststadt")).offers.size)
+    }
 }

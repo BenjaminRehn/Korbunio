@@ -36,10 +36,10 @@ class ReweProvider(
         require(Regex("^\\d{5}$").matches(request.postalCode)) { "Ungültige PLZ" }
         val direct = runCatching { fetchPublic(request) }
         val primary = direct.getOrNull()
-        // REWE can return a successfully rendered first page with only a
-        // small visible subset. Prefer the regional, paginated source in that
-        // case so Android does not silently present just the first ten offers.
-        if (primary != null && primary.offers.size > 10) return@withContext primary
+        // REWE's market page shows only a first part of the offers (about a dozen
+        // of several hundred). The regional source is paginated, so it is always
+        // asked as well and the larger result wins; a count threshold cannot tell
+        // a complete page from a partial one.
         val regional = runCatching { fallback?.fetch(request) }
             .getOrNull()
             ?.let { result ->
