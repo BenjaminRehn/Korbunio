@@ -12,6 +12,7 @@ import de.lesecuritae.korbuino.providers.RetailerRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import de.lesecuritae.korbuino.RetailerSelection
 import kotlinx.coroutines.coroutineScope
 
 class OfferSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -21,7 +22,8 @@ class OfferSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val providerId = inputData.getString("provider_id") ?: "rewe"
         return runCatching {
             val registry = ProviderRegistry.default(NetworkClientFactory.create(applicationContext))
-            val providers = if (providerId == "all") registry.all() else listOfNotNull(registry.byId(providerId))
+            val chosen = RetailerSelection.parse(providerId, registry.all().map { it.id })
+            val providers = if (providerId == "all") registry.all() else chosen.mapNotNull(registry::byId)
             if (providers.isEmpty()) error("Unbekannter Händler: $providerId")
             val fetched = coroutineScope {
                 providers.map { provider ->

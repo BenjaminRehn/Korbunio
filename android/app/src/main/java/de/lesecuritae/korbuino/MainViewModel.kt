@@ -91,7 +91,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Triple(
                     secureStore.get("postal_code").orEmpty(),
                     secureStore.get("city").orEmpty(),
-                    savedRetailer.takeUnless { it == "marktguru-combi" } ?: "all",
+                    RetailerSelection.format(RetailerSelection.parse(savedRetailer, retailers.map { it.first })),
                 )
             }
             _state.value = _state.value.copy(
@@ -148,11 +148,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun serverUrl(value: String) { val clean = value.trim().take(240); _state.value = _state.value.copy(serverUrl = clean); secureStore.put("server_url", clean) }
     fun serverToken(value: String) { val clean = value.trim().take(500); _state.value = _state.value.copy(serverToken = clean); secureStore.put("server_token", clean) }
     fun setServerMode(enabled: Boolean) { _state.value = _state.value.copy(serverMode = enabled); secureStore.put("server_mode", enabled.toString()) }
-    fun retailer(value: String) {
-        if (retailers.any { it.first == value }) {
-            _state.value = _state.value.copy(retailerId = value)
-            secureStore.put("retailer_id", value)
-        }
+    fun selectedRetailers(): Set<String> = RetailerSelection.parse(_state.value.retailerId, retailers.map { it.first })
+
+    /** Adds or removes a retailer from the choice; "all" clears it. */
+    fun toggleRetailer(id: String) {
+        if (retailers.none { it.first == id }) return
+        val value = RetailerSelection.format(RetailerSelection.toggle(selectedRetailers(), id))
+        _state.value = _state.value.copy(retailerId = value)
+        secureStore.put("retailer_id", value)
     }
 
     fun toggleLoyaltyProgram(program: String) {
@@ -318,7 +321,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val providers = if (current.serverMode && current.serverUrl.isNotBlank()) {
                 listOf(ServerProvider(current.serverUrl, serverToken, http))
             } else {
-                val direct = if (current.retailerId == "all") registry.all() else listOfNotNull(registry.byId(current.retailerId))
+                val chosen = selectedRetailers()
+                val direct = if (chosen.isEmpty()) registry.all() else chosen.mapNotNull(registry::byId)
                 // With a server address set, blocked retailers (403) are retried through the server.
                 if (current.serverUrl.isBlank()) direct else direct.map { provider ->
                     ServerFallbackProvider(

@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -200,15 +201,22 @@ private fun KorbuinoApp(
                 }
                 Text("Angebote werden direkt abgerufen und lokal gespeichert.")
                 var menuOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                val chosen = RetailerSelection.parse(state.retailerId, viewModel.retailers.map { it.first })
                 androidx.compose.foundation.layout.Box {
                     Button(onClick = { menuOpen = true }) {
-                        Text("Händler: ${viewModel.retailers.firstOrNull { it.first == state.retailerId }?.second ?: state.retailerId}")
+                        val names = viewModel.retailers.toMap()
+                        Text("Händler: ${RetailerSelection.label(chosen, names, viewModel.retailers.map { it.first })}")
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         // Hide retailers that had no offers for this postal code on the last load.
                         val hidden = if (state.postalCode == state.emptyRetailersPostal) state.emptyRetailers else emptySet()
-                        viewModel.retailers.filter { (id, _) -> id == "all" || id == state.retailerId || id !in hidden }.forEach { (id, name) ->
-                            DropdownMenuItem(text = { Text(name) }, onClick = { viewModel.retailer(id); menuOpen = false })
+                        viewModel.retailers.filter { (id, _) -> id == "all" || id in chosen || id !in hidden }.forEach { (id, name) ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                leadingIcon = { Checkbox(checked = if (id == "all") chosen.isEmpty() else id in chosen, onCheckedChange = null) },
+                                // The menu stays open so several retailers can be ticked in a row.
+                                onClick = { viewModel.toggleRetailer(id) },
+                            )
                         }
                     }
                 }
