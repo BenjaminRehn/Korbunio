@@ -1,3 +1,19 @@
+# 0.1.41
+
+## Müller am Server ohne Cookie-Übergabe
+
+- Server: Müller schützt seine Seite mit einer Fastly-Browserprüfung, die ein
+  Server ohne Browser nicht lösen kann. Statt einen Cookie aus dem Browser zu
+  verlangen, liest der Server jetzt die öffentliche KaufDA-Seite von Müller
+  (Zustand `KaufDA-Fallback`) und fragt, wenn diese nichts liefert, Marktguru.
+  Es ist nur ein Ausschnitt der Müller-Angebote, mit Bildern und Preisen; ein
+  Hinweis in der Ergebnisliste sagt das.
+- Entfernt: die Seite `/mueller/challenge`, die Routen `/mueller/session` und
+  `/mueller/session/clear` sowie der Hinweis „Müller-Bestätigung öffnen“ in den
+  Ergebnissen. Browser-Cookies müssen nicht mehr kopiert werden.
+- Native App: unverändert. Sie nutzt bei Müller schon die Kette Müller-Seite,
+  KaufDA, Marktguru und braucht dafür keine Bestätigung.
+
 # 0.1.40
 
 ## Warengruppen wieder als Reiter und Abschnitte, REWE vollständig

@@ -18,16 +18,11 @@ Room-Datenbank übertragen.
 
 ## Docker-Webbetrieb
 
-Der Hintergrundprozess läuft in einem separaten Container und kann Cookies aus
-dem Browser des Nutzers nicht heimlich lesen. Bei einer Müller-Challenge zeigt
-die Ergebnisansicht deshalb einen Link zur offiziellen Müller-Seite. Danach
-kann der Nutzer den Cookie-Header der Müller-Domain ausdrücklich über die
-angezeigte Session-Seite übergeben; die Seite beschreibt, wie man den Header in den
-Entwicklerwerkzeugen des Browsers findet. Korbuino hält ihn nur kurz im
-Arbeitsspeicher, sendet ihn ausschließlich an Müller und löscht ihn bei Ablauf
-oder einer erneuten Challenge. Er landet nicht in SQLite, Backups, Logs oder
-API-Antworten.
+Der Server läuft ohne Browser und kann die Prüfung nicht lösen. Bei Müller
+(Fastly „Client Challenge“) fragt er deshalb, wenn die Müller-Seite mit `403`
+oder `429` antwortet, die öffentliche KaufDA-Seite des Händlers ab und, wenn die
+nichts liefert, Marktguru. Die Ergebnisse tragen den Zustand `KaufDA-Fallback`
+beziehungsweise `Marktguru-Fallback` und einen Hinweis, dass es nur ein Ausschnitt
+der Angebote ist. Eine Übergabe von Browser-Cookies gibt es nicht mehr.
 
-Ein unbeaufsichtigtes Umgehen der Challenge ist nicht Teil von Korbuino. Für
-einen dauerhaften Serverabruf ist ein offizieller Müller-Endpunkt oder eine
-ausdrücklich erlaubte Schnittstelle erforderlich.
+Ein unbeaufsichtigtes Umgehen der Challenge ist nicht Teil von Korbuino.

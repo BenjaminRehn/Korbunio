@@ -74,13 +74,6 @@ class MuellerChallengeHttp:
         raise ToolError("HTTP 403 bei www.mueller.de")
 
 
-class MuellerCookieHttp:
-    def __init__(self):
-        self.headers = None
-
-    def get_bytes(self, url, headers=None):
-        self.headers = headers
-        return MUELLER_HTML.encode()
 
 
 def test_rossmann_official_advertising_card_mapping():
@@ -124,15 +117,10 @@ def test_mueller_online_offer_mapping_is_labelled_as_online():
 
 
 def test_mueller_403_is_reported_as_manual_browser_challenge():
-    with pytest.raises(ToolError, match="manuelle Browser-Bestätigung"):
+    with pytest.raises(ToolError, match="Browser-Prüfung"):
         OfficialMuellerSource(MuellerChallengeHttp()).load("10115")
 
 
-def test_mueller_explicit_cookie_handoff_is_sent_only_to_mueller():
-    http = MuellerCookieHttp()
-    offers = OfficialMuellerSource(http, lambda: "__Secure-test=temporary").load("10115")
-    assert len(offers) == 1
-    assert http.headers == {"Accept": "text/html", "Cookie": "__Secure-test=temporary"}
 
 
 def test_dm_maps_only_official_clearance_products_and_caches_catalogue():

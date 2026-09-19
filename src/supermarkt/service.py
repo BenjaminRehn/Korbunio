@@ -11,7 +11,6 @@ from datetime import datetime
 from typing import Any
 
 from .cache import PersistentSnapshotStore
-from .challenges import clear_mueller_cookie, get_mueller_cookie
 from .categories import category_decision
 from .common import clean_text, deduplicate_offers, filter_offers, filter_offers_by_keywords, normalize_aldi_region, normalize_keywords, normalize_offer_week, normalize_pack, normalize_view, offer_week_reference, parse_iso_date
 from .compare import OfferComparator, OfferMapper
@@ -42,7 +41,7 @@ from .presentation import offer_for_response, offer_sort_key, resolve_retailer_n
 from .region import AldiRegionResolver
 
 LOGGER = logging.getLogger(__name__)
-from .sources import KaufdaGlobusImageSource, MarktguruClient, NettoMarkenMarketResolver, OfficialAldiSource, OfficialDmSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource, OfficialTrinkgutSource
+from .sources import KaufdaGlobusImageSource, KaufdaRetailerSource, MarktguruClient, NettoMarkenMarketResolver, OfficialAldiSource, OfficialDmSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource, OfficialTrinkgutSource
 from .sources.netto_scottie import NettoScottieMarketResolver
 from .sources.aldi_chain import AldiOfferChain
 
@@ -69,7 +68,8 @@ class SourceLoader:
         self.official_netto_scottie = OfficialNettoScottieSource(http, self.netto_scottie_markets.resolve)
         self.netto_marken_markets = NettoMarkenMarketResolver(http)
         self.official_rossmann = OfficialRossmannSource(timeout_seconds=TIMEOUT_SECONDS)
-        self.official_mueller = OfficialMuellerSource(http, get_mueller_cookie, clear_mueller_cookie)
+        self.official_mueller = OfficialMuellerSource(http)
+        self.kaufda_mueller = KaufdaRetailerSource(http, "Müller", "Müller", "Mueller")
         self.official_dm = OfficialDmSource(http)
         self.official_marktkauf = OfficialMarktkaufSource(TIMEOUT_SECONDS)
         self.official_kaufland = OfficialKauflandSource(
@@ -280,8 +280,6 @@ class SourceLoader:
                     offers = deduplicate_offers(list(future.result()))
                 except Exception as exc:
                     failed_primary.add(name)
-                    if name == "Müller" and "manuelle Browser-Bestätigung" in str(exc):
-                        challenge_urls[name] = self.official_mueller.OFFERS_URL
                     if name in {"Marktkauf", "HOL’AB!", "trinkgut"}:
                         source_states[name] = "kein Markt"
                     else:
@@ -355,6 +353,23 @@ class SourceLoader:
             name for name in AGGREGATOR_RETAILERS
             if name in active_contexts and name != "Globus"
         }
+        if "Müller" in failed_primary and "Müller" in active_contexts and "Müller" not in final_by_retailer:
+            # Müller's own site answers a plain request with a browser challenge.
+            # KaufDA's public page of the retailer is the first fallback; only when
+            # it has nothing does Marktguru get asked, below.
+            try:
+                kaufda_offers = deduplicate_offers(self.kaufda_mueller.load(target_date))
+            except Exception as exc:
+                request_errors.append(f"Müller KaufDA: {type(exc).__name__}: {exc}")
+            else:
+                if kaufda_offers:
+                    final_by_retailer["Müller"] = kaufda_offers
+                    source_states["Müller"] = "KaufDA-Fallback"
+                    failed_primary.discard("Müller")
+                    store_warnings.append(
+                        "Müller: offizielle Seite war nicht lesbar; KaufDA wurde als Fallback verwendet "
+                        "(nur ein Ausschnitt der Angebote)."
+                    )
         fallback_names = {
             name for name in failed_primary
             if name in active_contexts

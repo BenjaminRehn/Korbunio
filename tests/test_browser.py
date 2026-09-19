@@ -23,29 +23,14 @@ def test_home_and_static_assets():
     assert 'name="rewe_market_id"' in response.text
     assert 'name="offer_week"' in response.text
     assert 'value="next"' in response.text
-    assert "Korbuino 0.1.40" in response.text
+    assert "Korbuino 0.1.41" in response.text
     assert "KorbKlar" not in response.text
     assert client.get("/static/home.css").status_code == 200
     assert client.get("/static/results-v2.js").status_code == 200
 
 
-def test_mueller_challenge_explains_explicit_session_handoff():
-    response = TestClient(app).get("/mueller/challenge")
-    assert response.status_code == 200
-    assert "www.mueller.de/c/online-angebote/" in response.text
-    assert "Cookie-Header" in response.text
-    # The page also says where the header is and how to get there.
-    assert "F12" in response.text
-    assert "Netzwerk" in response.text
-    assert "Anfrage-Header" in response.text
 
 
-def test_mueller_session_handoff_does_not_echo_cookie():
-    client = TestClient(app)
-    response = client.post("/mueller/session", data={"cookie": "__Secure-test=temporary"}, follow_redirects=False)
-    assert response.status_code == 303
-    assert "temporary" not in response.text
-    client.post("/mueller/session/clear", follow_redirects=False)
 
 
 def test_theme_switcher_is_shared_persistent_and_overrides_system_theme():
@@ -303,85 +288,18 @@ def test_browser_netto_market_lookup_returns_all_exact_matches(monkeypatch):
     assert [market["market_id"] for market in response.json()["markets"]] == ["10", "20"]
 
 
-def test_mueller_cookie_keeps_a_copied_header_name_out_of_the_value():
-    from supermarkt.challenges import MuellerSessionStore
-
-    store = MuellerSessionStore()
-    store.set("Cookie: a=1; b=2")
-    assert store.get() == "a=1; b=2"
-    store.set("cookie:c=3")
-    assert store.get() == "c=3"
-    store.set("d=4")
-    assert store.get() == "d=4"
 
 
-def _extract(text):
-    from supermarkt.challenges import extract_cookie_header
-
-    return extract_cookie_header(text)
 
 
-def test_mueller_cookie_is_taken_from_a_curl_copied_in_the_browser():
-    firefox = (
-        "curl 'https://www.mueller.de/c/online-angebote/' \\\n"
-        "  --compressed \\\n"
-        "  -H 'User-Agent: Mozilla/5.0' \\\n"
-        "  -H 'Authorization: Bearer must-not-be-kept' \\\n"
-        "  -H 'Cookie: a=1; b=2' \\\n"
-        "  -H 'Sec-Fetch-Mode: navigate'"
-    )
-    assert _extract(firefox) == "a=1; b=2"
-    # Chrome writes the cookies with -b.
-    chrome = "curl 'https://www.mueller.de/' \\\n  -b 'c=3; d=4' \\\n  -H 'accept: text/html'"
-    assert _extract(chrome) == "c=3; d=4"
 
 
-def test_mueller_cookie_is_taken_from_pasted_request_headers():
-    headers = "GET / HTTP/2\nHost: www.mueller.de\nCookie: e=5; f=6\nAccept: text/html\n"
-    assert _extract(headers) == "e=5; f=6"
 
 
-def test_mueller_cookie_of_another_site_is_refused():
-    import pytest
-
-    other = "curl 'https://www.example.com/' \\\n  -H 'Cookie: session=secret'"
-    with pytest.raises(ValueError):
-        _extract(other)
-    lookalike = "curl 'https://evilmueller.de/' \\\n  -H 'Cookie: a=1'"
-    with pytest.raises(ValueError):
-        _extract(lookalike)
 
 
-def test_mueller_pasted_request_without_cookie_is_refused():
-    import pytest
-
-    with pytest.raises(ValueError):
-        _extract("curl 'https://www.mueller.de/' \\\n  -H 'Accept: text/html'")
 
 
-def test_mueller_session_route_accepts_a_pasted_curl():
-    from supermarkt.challenges import clear_mueller_cookie, get_mueller_cookie
-
-    client = TestClient(app)
-    curl = "curl 'https://www.mueller.de/c/' \\\n  -H 'Authorization: nope' \\\n  -H 'cookie: g=7; h=8'"
-    try:
-        response = client.post("/mueller/session", data={"cookie": curl}, follow_redirects=False)
-        assert response.status_code == 303
-        assert get_mueller_cookie() == "g=7; h=8"
-        assert "nope" not in get_mueller_cookie()
-        wrong = client.post(
-            "/mueller/session", data={"cookie": "curl 'https://example.org/' -H 'Cookie: x=1'"}, follow_redirects=False
-        )
-        assert wrong.status_code == 400
-    finally:
-        clear_mueller_cookie()
-
-
-def test_mueller_challenge_page_names_the_right_tab_and_the_ad_blocker():
-    text = TestClient(app).get("/mueller/challenge").text
-    assert "im Müller-Tab" in text
-    assert "uBlock" in text
-    assert "Als cURL kopieren" in text
 
 
 def test_results_page_has_category_tabs_and_a_sort_by_category():
@@ -395,3 +313,9 @@ def test_results_page_has_category_tabs_and_a_sort_by_category():
     script = TestClient(app).get("/static/results-v2.js").text
     assert "renderCategoryTabs" in script
     assert "collapsedGroups" in script
+
+
+def test_the_cookie_handoff_pages_are_gone():
+    client = TestClient(app)
+    assert client.get("/mueller/challenge").status_code == 404
+    assert client.post("/mueller/session", data={"cookie": "a=b"}, follow_redirects=False).status_code in {404, 405}
