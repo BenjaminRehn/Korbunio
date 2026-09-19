@@ -171,3 +171,19 @@ def test_openapi_exposes_only_compare_operation():
             if method.lower() in {"get", "post", "put", "patch", "delete"}:
                 operations.append((method.lower(), path, operation.get("operationId")))
     assert operations == [("post", "/api/v1/compare", "supermarkt_preisvergleich")]
+
+
+def test_compare_returns_image_urls_only_when_requested(monkeypatch):
+    from conftest import FakeEngine
+    engine = FakeEngine()
+    captured = []
+    original_page = engine.page
+    def page(snapshot, **kwargs):
+        captured.append(kwargs["include_image_urls"])
+        return original_page(snapshot, **kwargs)
+    engine.page = page
+    monkeypatch.setattr(runtime, "get_engine", lambda: engine)
+    client = TestClient(app, base_url="https://offers.example.test")
+    client.post("/api/v1/compare", json={"postal_code": "01067"})
+    client.post("/api/v1/compare", json={"postal_code": "01067", "include_image_urls": True})
+    assert captured == [False, True]

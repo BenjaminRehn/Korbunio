@@ -44,6 +44,10 @@ class SupermarketRequest(BaseModel):
     )
     sort: Literal["price", "unit_price", "retailer", "product"] = Field(default="price")
     refresh: bool = Field(default=False, description="Servercache ignorieren und Quellen neu abrufen")
+    include_image_urls: bool = Field(
+        default=False,
+        description="Originale Bild- und Quell-URLs mitliefern, für Apps, die Bilder selbst laden. Standardmäßig aus, um Antworten klein zu halten.",
+    )
 
     @field_validator("postal_code")
     @classmethod

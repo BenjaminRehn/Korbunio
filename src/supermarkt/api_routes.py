@@ -69,7 +69,7 @@ def supermarket_compare(request_data: SupermarketRequest, request: Request, _: N
         if request_data.offer_week == "next":
             snapshot_kwargs["offer_week"] = "next"
         snapshot, from_cache = engine.snapshot(request_data.postal_code, request_data.aldi_region, request_data.refresh, **snapshot_kwargs)
-        page = engine.page(snapshot, filter_text=request_data.filter_text, keywords=tuple(request_data.keywords), retailer=request_data.retailer, page=request_data.page, page_size=request_data.page_size, view=request_data.view, loyalty_programs=tuple(request_data.loyalty_programs), sort=request_data.sort, include_image_urls=False)
+        page = engine.page(snapshot, filter_text=request_data.filter_text, keywords=tuple(request_data.keywords), retailer=request_data.retailer, page=request_data.page, page_size=request_data.page_size, view=request_data.view, loyalty_programs=tuple(request_data.loyalty_programs), sort=request_data.sort, include_image_urls=request_data.include_image_urls)
         page["status"] = "ok"
         page["from_cache"] = from_cache
         page["result_url"] = build_result_url(request, snapshot["search_id"], tuple(request_data.loyalty_programs))
