@@ -43,6 +43,14 @@ class ProviderRegistry(private val providers: List<RetailerProvider>) {
                         MarktguruProvider("Müller", http, providerId = "mueller", providerDisplayName = "Müller"),
                     ),
                 ),
+                FallbackRetailerProvider(
+                    EdekaProvider(http),
+                    FallbackRetailerProvider(
+                        KaufdaRetailerProvider("edeka", "EDEKA", "EDEKA", "Edeka", http),
+                        MarktguruProvider("EDEKA", http, providerId = "edeka", providerDisplayName = "EDEKA"),
+                    ),
+                    surfacePrimaryFailureWhenFallbackEmpty = true,
+                ),
                 HtmlFlyerProvider("holab", "HOL'AB!", "https://holab.de/angebote", http),
                 FallbackRetailerProvider(
                     HtmlFlyerProvider("netto-schwarz", "Netto mit Hund", "https://netto.de/angebote/", http),

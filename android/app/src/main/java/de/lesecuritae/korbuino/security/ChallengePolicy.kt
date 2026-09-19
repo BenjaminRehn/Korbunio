@@ -11,6 +11,7 @@ object ChallengePolicy {
         "mueller.de", "www.mueller.de", "holab.de", "www.holab.de",
         "netto.de", "www.netto.de", "netto-online.de", "www.netto-online.de",
         "dm.de", "www.dm.de", "marktguru.de", "www.marktguru.de",
+        "edeka.de", "www.edeka.de",
         "challenges.cloudflare.com", "google.com", "www.google.com",
         "gstatic.com", "www.gstatic.com", "hcaptcha.com", "www.hcaptcha.com",
         "newassets.hcaptcha.com",
