@@ -1,3 +1,25 @@
+# 0.1.40
+
+## Warengruppen wieder als Reiter und Abschnitte, REWE vollständig
+
+- Server, native App und Flutter-App haben wieder eine Reiterleiste mit den
+  Warengruppen (Obst & Gemüse, Fleisch & Wurst, Molkereiprodukte & Eier,
+  Backwaren, Tiefkühl, Getränke, Snacks, Drogerie, …) samt Anzahl. Ein Reiter
+  zeigt nur diese Warengruppe.
+- Neue Sortierung „Warengruppe“: Die Angebote erscheinen in Abschnitten in der
+  Reihenfolge eines Ladenrundgangs (Obst & Gemüse zuerst, „Weitere Angebote“
+  zuletzt). Die Abschnitte lassen sich ein- und ausklappen. Die API kennt dafür
+  `sort=category`.
+- Die native App ordnet die Angebote mit denselben Regeln wie der Server einer
+  Warengruppe zu (mit einem Abgleich gegen die Entscheidungen des Servers
+  getestet). Joghurt, Quark, Butter und Frischkäse zählen dabei als
+  Molkereiprodukte.
+- REWE in der nativen App: Die Marktseite von REWE zeigt nur einen kleinen
+  Ausschnitt der Angebote (bei einer Leipziger Postleitzahl waren es 11 von rund 200). Weil das über der
+  bisherigen Schwelle von zehn lag, hielt die App es für vollständig und ließ die
+  vollständige Quelle aus. Sie wird jetzt immer mitgefragt, und die größere
+  Liste gewinnt.
+
 # 0.1.39
 
 ## Müller-Sitzung am Server einfacher übergeben

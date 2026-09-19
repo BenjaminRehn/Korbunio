@@ -125,7 +125,7 @@ class ReweProviderTest {
     }
 
     @Test fun `a market page with eleven offers does not hide the full regional list`() = runTest {
-        // Reported for 04209: the page showed 11 of about 200 offers.
+        // Reported by a user: the page showed 11 of about 200 offers.
         marketPage(11).forEach(server::enqueue)
         val provider = ReweProvider(OkHttpClient(), server.url("/").toString().trimEnd('/'), regionalSource(200))
 
