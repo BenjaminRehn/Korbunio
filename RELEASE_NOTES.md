@@ -1,3 +1,20 @@
+# 0.1.42
+
+## Kaufland mit den Preisen der Region, schneller Scrollbalken, Händlerfilter
+
+- Kaufland: Die Preise stimmen jetzt mit der Filiale überein. Kaufland hat regionale
+  Preise (Hochland Schmelzkäse zum Beispiel 1,59 € in Sachsen und Berlin, 1,79 € in
+  Essen und München). Server und native App holten bisher nur die Preisliste der
+  Standardregion und nutzten die Filiale nur, um die Artikel zu filtern. Beide fragen
+  die Übersicht jetzt für die Filiale der Region ab. Die App braucht dafür die Stadt
+  in der Eingabe; ohne sie bleibt es bei der Standardregion (Issue #45).
+- Native App: Bei langen Listen gibt es am rechten Rand einen Griff zum schnellen
+  Scrollen. Beim Ziehen zeigt eine Blase, wo man ist: den Buchstaben bei der Sortierung
+  nach Produktname, sonst den Händler, die Warengruppe oder den Preis (Issue #44).
+- Native App: Die Angebotsliste und die Suche zeigen nur die Händler, die im Menü
+  „Händler“ gewählt sind. Angebote früherer Abrufe anderer Händler blieben bisher
+  gespeichert und tauchten in der Suche wieder auf (Issue #44).
+
 # 0.1.41
 
 ## Müller am Server ohne Cookie-Übergabe
