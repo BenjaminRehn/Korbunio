@@ -17,6 +17,8 @@ import de.lesecuritae.korbuino.providers.NetworkClientFactory
 import de.lesecuritae.korbuino.providers.ProviderRegistry
 import de.lesecuritae.korbuino.providers.ProviderImportPolicy
 import de.lesecuritae.korbuino.providers.RetailerRequest
+import de.lesecuritae.korbuino.providers.RetailerProvider
+import de.lesecuritae.korbuino.providers.ServerFallbackProvider
 import de.lesecuritae.korbuino.providers.ServerProvider
 import de.lesecuritae.korbuino.kitchenowl.KitchenOwlClient
 import de.lesecuritae.korbuino.kitchenowl.KitchenOwlTarget
@@ -293,10 +295,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val http = NetworkClientFactory.create(getApplication())
             val providers = if (current.serverMode && current.serverUrl.isNotBlank()) {
                 listOf(ServerProvider(current.serverUrl, serverToken, http))
-            } else if (current.retailerId == "all") {
-                registry.all()
             } else {
-                listOfNotNull(registry.byId(current.retailerId))
+                val direct = if (current.retailerId == "all") registry.all() else listOfNotNull(registry.byId(current.retailerId))
+                // With a server address set, blocked retailers (403) are retried through the server.
+                if (current.serverUrl.isBlank()) direct else direct.map { provider ->
+                    ServerFallbackProvider(
+                        provider,
+                        ServerProvider(current.serverUrl, serverToken, http, provider.serverName(), provider.id),
+                    )
+                }
             }
             if (providers.isEmpty()) {
                 _state.value = _state.value.copy(loading = false, message = "Kein Händler ausgewählt")
@@ -434,10 +441,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun isChallengeError(error: Throwable): Boolean {
-        val text = generateSequence(error) { it.cause }.joinToString(" ") { it.message.orEmpty() }.lowercase()
-        return listOf("403", "429", "captcha", "challenge", "forbidden", "anti-bot", "bot protection").any(text::contains)
-    }
+    private fun isChallengeError(error: Throwable): Boolean = ServerFallbackProvider.isBlocked(error)
+
+    /** The regional suffix is only shown in the app; the server knows the plain retailer name. */
+    private fun RetailerProvider.serverName(): String = displayName.removeSuffix(" (regional)")
 
     private suspend fun rebuildOfferDisplay(offers: List<OfferEntity>) {
         val products = withContext(Dispatchers.IO) {

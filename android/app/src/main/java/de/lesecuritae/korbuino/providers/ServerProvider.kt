@@ -6,6 +6,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -15,41 +19,67 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/** Optional server mode. The native app can use a self-hosted Korbuino API. */
+/**
+ * Self-hosted Korbuino API. Without [retailerName] it returns the server's
+ * consolidated result for every retailer (server mode). With it, it asks the
+ * server for that one retailer, whose offers are stored under [localId]; the
+ * server fetches with curl_cffi, so it gets through where the app is blocked.
+ */
 class ServerProvider(
     private val baseUrl: String,
     private val token: String,
     private val http: OkHttpClient,
+    private val retailerName: String? = null,
+    private val localId: String? = null,
 ) : RetailerProvider {
-    override val id = "korbuino-server"
-    override val displayName = "Korbuino Server"
+    override val id = localId ?: "korbuino-server"
+    override val displayName = retailerName ?: "Korbuino Server"
     private val json = Json { ignoreUnknownKeys = true }
 
     override suspend fun fetch(request: RetailerRequest): ProviderResult = withContext(Dispatchers.IO) {
         require(request.postalCode.matches(Regex("^\\d{5}$"))) { "Ungültige PLZ" }
-        val requestBuilder = Request.Builder().url(baseUrl.trimEnd('/') + "/api/v1/compare")
-            .header("Accept", "application/json")
-            .post("""{"postal_code":"${request.postalCode}","refresh":true,"retailers":[]}""".toRequestBody("application/json".toMediaType()))
-        if (token.isNotBlank()) requestBuilder.header("Authorization", "Bearer $token")
-        val root = json.parseToJsonElement(
-            http.newCall(requestBuilder.build()).execute().use { response ->
-                check(response.isSuccessful) { "Korbuino Server HTTP ${response.code}" }
-                response.body?.string().orEmpty()
-            },
-        ).jsonObject
-        val resultRoot = if (root["offers"]?.jsonArray?.isNotEmpty() == true) root else fetchResult(root)
+        val singleRetailer = retailerName != null
+        val offerItems = mutableListOf<JsonObject>()
+        var page = 1
+        var pageCount = 1
+        do {
+            val body = buildJsonObject {
+                put("postal_code", request.postalCode)
+                put("refresh", true)
+                putJsonArray("retailers") { retailerName?.let { add(JsonPrimitive(it)) } }
+                if (singleRetailer) {
+                    // One retailer's whole offer list, not just the cheapest hits.
+                    put("view", "all")
+                    put("page", page)
+                    put("page_size", 100)
+                }
+            }.toString()
+            val requestBuilder = Request.Builder().url(baseUrl.trimEnd('/') + "/api/v1/compare")
+                .header("Accept", "application/json")
+                .post(body.toRequestBody("application/json".toMediaType()))
+            if (token.isNotBlank()) requestBuilder.header("Authorization", "Bearer $token")
+            val root = json.parseToJsonElement(
+                http.newCall(requestBuilder.build()).execute().use { response ->
+                    check(response.isSuccessful) { "Korbuino Server HTTP ${response.code}" }
+                    response.body?.string().orEmpty()
+                },
+            ).jsonObject
+            val resultRoot = if (root["offers"]?.jsonArray?.isNotEmpty() == true) root else fetchResult(root)
+            resultRoot["offers"]?.jsonArray.orEmpty().forEach { offerItems += it.jsonObject }
+            pageCount = if (singleRetailer) (resultRoot.number("page_count")?.toInt() ?: 1).coerceIn(1, MAX_PAGES) else 1
+            page++
+        } while (page <= pageCount)
         val products = mutableListOf<ProductEntity>()
         val offers = mutableListOf<OfferEntity>()
-        resultRoot["offers"]?.jsonArray.orEmpty().forEachIndexed { index, element ->
-            val item = element.jsonObject
+        offerItems.forEachIndexed { index, item ->
             val name = item.text("product") ?: item.text("name") ?: return@forEachIndexed
             val price = item.number("regular_price") ?: item.number("price") ?: return@forEachIndexed
-            val retailer = item.text("retailer") ?: "Unbekannt"
+            val retailer = localId ?: item.text("retailer") ?: "Unbekannt"
             val external = item.text("offer_id") ?: "$index-${name.lowercase().hashCode()}"
             val productId = "server-product-${name.lowercase().hashCode()}"
             products += ProductEntity(productId, name, brand = item.text("brand").orEmpty(), normalizedKey = productId)
             offers += OfferEntity(
-                id = "server:$external", retailerId = retailer, productId = productId,
+                id = "${localId ?: "server"}:$external", retailerId = retailer, productId = productId,
                 externalId = external, priceCents = (price * 100).toInt(),
                 basePriceCents = item.number("base_price")?.let { (it * 100).toInt() },
                 categoryId = item.text("category"), sourceUrl = item.text("source_url").orEmpty(),
@@ -62,6 +92,8 @@ class ServerProvider(
         }
         ProviderResult(products.distinctBy { it.id }, offers.distinctBy { it.id })
     }
+
+    private companion object { const val MAX_PAGES = 20 }
 
     private fun fetchResult(compare: JsonObject): JsonObject {
         val resultUrl = compare.text("result_url") ?: return compare

@@ -75,7 +75,7 @@ class HtmlFlyerProviderTest {
             </section>
         """))
         val result = HtmlFlyerProvider(
-            "netto-schwarz", "Netto mit Hund", server.url("/angebote/").toString(), OkHttpClient(),
+            "netto-schwarz", "Netto schwarz", server.url("/angebote/").toString(), OkHttpClient(),
         ).fetch(RetailerRequest("26122"))
 
         assertEquals(1, result.offers.size)

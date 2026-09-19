@@ -60,7 +60,7 @@ class ProviderRegistry(private val providers: List<RetailerProvider>) {
                     KaufdaRetailerProvider("trinkgut", "trinkgut", "trinkgut", "Trinkgut", http),
                 ),
                 FallbackRetailerProvider(
-                    HtmlFlyerProvider("netto-schwarz", "Netto mit Hund", "https://netto.de/angebote/", http),
+                    HtmlFlyerProvider("netto-schwarz", "Netto schwarz", "https://netto.de/angebote/", http),
                     MarktguruProvider("Netto mit dem Scottie", http),
                 ),
                 MarktguruProvider(
