@@ -49,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     'Netto schwarz',
     'Globus',
     'HOL’AB!',
+    'trinkgut',
     'Rossmann',
     'Müller',
     'dm',
