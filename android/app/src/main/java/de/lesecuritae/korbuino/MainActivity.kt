@@ -51,6 +51,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -339,19 +340,30 @@ private fun OfferOverview(
     var sortMode by rememberSaveable { mutableStateOf("retailer") }
     var sortMenuOpen by remember { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableStateOf(0) }
+    var categoryFilter by rememberSaveable { mutableStateOf("") }
+    val collapsedGroups = remember { mutableStateListOf<String>() }
     val retailerNames = viewModel.retailers.toMap()
     val presentRetailerIds = state.offers.map { it.offer.retailerId }.toSet()
     val retailerIds = viewModel.retailers.map { it.first }.filter { it != "all" && it in presentRetailerIds } +
         presentRetailerIds.filter { it !in retailerNames }.sorted()
     val retailerCounts = state.offers.groupingBy { it.offer.retailerId }.eachCount()
     val retailerOptions = listOf("all" to "Alle Händler") + retailerIds.map { it to (retailerNames[it] ?: it) }
-    val visibleOffers = state.offers
+    val groupOf = remember(state.offers) {
+        state.offers.associate { it.offer.id to ProductGroups.of(it.offer.categoryId, it.productName) }
+    }
+    // The product-group tabs count what the retailer chip and the text filter leave, but not the tab itself.
+    val scopedOffers = state.offers
         .filter { display -> retailerFilter == "all" || display.offer.retailerId == retailerFilter }
         .filter { display ->
             offerFilter.isBlank() || display.productName.contains(offerFilter, ignoreCase = true) ||
                 display.offer.retailerId.contains(offerFilter, ignoreCase = true) ||
                 display.offer.categoryId.orEmpty().contains(offerFilter, ignoreCase = true)
         }
+    val groupCounts = scopedOffers.groupingBy { groupOf[it.offer.id] ?: ProductGroups.OTHER }.eachCount()
+    val groupTabs = ProductGroups.ORDER.filter { it in groupCounts } + groupCounts.keys.filter { it !in ProductGroups.ORDER }.sorted()
+    val activeGroup = categoryFilter.takeIf { it in groupCounts }.orEmpty()
+    val visibleOffers = scopedOffers
+        .filter { display -> activeGroup.isEmpty() || (groupOf[display.offer.id] ?: ProductGroups.OTHER) == activeGroup }
         .let { offers ->
             when (sortMode) {
                 "product" -> offers.sortedWith(compareBy({ it.productName.lowercase() }, { retailerNames[it.offer.retailerId] ?: it.offer.retailerId }))
@@ -360,9 +372,24 @@ private fun OfferOverview(
                     { effectivePriceCents(it.offer, state.selectedLoyaltyPrograms) },
                     { it.productName.lowercase() },
                 ))
+                "category" -> offers.sortedWith(compareBy(
+                    { ProductGroups.rank(groupOf[it.offer.id] ?: ProductGroups.OTHER) },
+                    { groupOf[it.offer.id] ?: ProductGroups.OTHER },
+                    { effectivePriceCents(it.offer, state.selectedLoyaltyPrograms) },
+                    { it.productName.lowercase() },
+                ))
                 else -> offers.sortedWith(compareBy({ effectivePriceCents(it.offer, state.selectedLoyaltyPrograms) }, { it.productName.lowercase() }))
             }
         }
+    // Sorted by product group, the list carries the group names as headings; a collapsed group keeps only its heading.
+    val rows: List<Any> = if (sortMode != "category") visibleOffers else buildList {
+        var current: String? = null
+        visibleOffers.forEach { display ->
+            val group = groupOf[display.offer.id] ?: ProductGroups.OTHER
+            if (group != current) { add(group); current = group }
+            if (group !in collapsedGroups) add(display)
+        }
+    }
     val availableLoyaltyPrograms = state.offers.mapNotNull { display ->
         val id = display.offer.loyaltyProgram ?: return@mapNotNull null
         id to (display.offer.loyaltyLabel ?: id)
@@ -416,6 +443,26 @@ private fun OfferOverview(
                         }
                     }
                 }
+                if (groupTabs.isNotEmpty()) {
+                    item {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            item {
+                                FilterChip(
+                                    selected = activeGroup.isEmpty(),
+                                    onClick = { categoryFilter = "" },
+                                    label = { Text("Alle Warengruppen · ${scopedOffers.size}") },
+                                )
+                            }
+                            items(groupTabs) { group ->
+                                FilterChip(
+                                    selected = activeGroup == group,
+                                    onClick = { categoryFilter = group },
+                                    label = { Text("$group · ${groupCounts[group] ?: 0}") },
+                                )
+                            }
+                        }
+                    }
+                }
                 if (availableLoyaltyPrograms.isNotEmpty()) {
                     item { Text("Bonusprogramme", style = MaterialTheme.typography.labelLarge) }
                     item {
@@ -433,10 +480,10 @@ private fun OfferOverview(
                 item {
                     Box {
                         Button(onClick = { sortMenuOpen = true }) {
-                            Text("Sortierung: ${when (sortMode) { "product" -> "Produktname"; "retailer" -> "Händler"; else -> "Preis" }}")
+                            Text("Sortierung: ${when (sortMode) { "product" -> "Produktname"; "retailer" -> "Händler"; "category" -> "Warengruppe"; else -> "Preis" }}")
                         }
                         DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
-                            listOf("price" to "Preis", "retailer" to "Händler", "product" to "Produktname").forEach { (id, label) ->
+                            listOf("price" to "Preis", "retailer" to "Händler", "category" to "Warengruppe", "product" to "Produktname").forEach { (id, label) ->
                                 DropdownMenuItem(text = { Text(label) }, onClick = { sortMode = id; sortMenuOpen = false })
                             }
                         }
@@ -447,6 +494,7 @@ private fun OfferOverview(
                         "${visibleOffers.size} Treffer · " + when (sortMode) {
                             "product" -> "nach Produktname sortiert"
                             "retailer" -> "nach Händler gruppiert"
+                            "category" -> "nach Warengruppe gruppiert"
                             else -> "nach Preis sortiert"
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -464,7 +512,18 @@ private fun OfferOverview(
                     }
                 }
                 item { Text(state.message) }
-                items(visibleOffers, key = { it.offer.id }) { offer ->
+                items(rows, key = { if (it is String) "group:$it" else (it as OfferDisplay).offer.id }) { row ->
+                  if (row is String) {
+                    val collapsed = row in collapsedGroups
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { if (collapsed) collapsedGroups.remove(row) else collapsedGroups.add(row) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text((if (collapsed) "▸ " else "▾ ") + row + " · " + (groupCounts[row] ?: 0), fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                  } else {
+                    val offer = row as OfferDisplay
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
@@ -512,6 +571,7 @@ private fun OfferOverview(
                             }
                         }
                     }
+                  }
                 }
             }
         }

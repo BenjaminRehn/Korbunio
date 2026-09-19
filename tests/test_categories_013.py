@@ -88,3 +88,10 @@ def test_source_category_substrings_do_not_hijack_unrelated_categories():
     assert normalize_category("Meeresfrüchte", name="Garnelen") == "Fisch & Meeresfrüchte"
     assert normalize_category("Wassersport") == "Wohnen, Freizeit & Non-Food"
     assert normalize_category("Spirituosen", name="Eierlikör") == "Getränke"
+
+
+def test_retailer_category_yoghurt_belongs_to_dairy():
+    from supermarkt.categories import normalize_category
+
+    assert normalize_category("Joghurt", "REWE", "Almighurt") == "Molkereiprodukte & Eier"
+    assert normalize_category("Quark & Frischkäse", "REWE", "Sahnequark") == "Molkereiprodukte & Eier"

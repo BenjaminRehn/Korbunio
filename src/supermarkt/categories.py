@@ -39,7 +39,7 @@ _SOURCE_RULES = (
     ("Obst & Gemüse", r"obst|gemuese|gemüse|salat|(?<!meeres)frucht|(?<!meeres)fruechte|(?<!meeres)früchte|beere|zitrus|melone"),
     ("Fleisch & Wurst", r"fleisch|wurst|wuerst|würst|gefluegel|geflügel|steak|schnitzel"),
     ("Fisch & Meeresfrüchte", r"fisch|meeresfr"),
-    ("Molkereiprodukte & Eier", r"molkerei|milch|kaese|käse|eier|sahne|schmand"),
+    ("Molkereiprodukte & Eier", r"molkerei|milch|kaese|käse|eier|sahne|schmand|joghurt|jogurt|quark|butter|frischk"),
     ("Tiefkühl / Eis & Dessert", r"tiefkuehl|tiefkühl|tk\b|eiscreme|speiseeis|dessert|\beis\b"),
     ("Backwaren", r"backwaren|baeck|bäck|brot"),
     ("Kühlprodukte", r"kuehl|kühl|frische convenience|feinkost"),
