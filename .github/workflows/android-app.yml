@@ -290,7 +290,8 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: gradle
-      - uses: android-actions/setup-android@v3
+      # The runner image already ships the Android SDK; setup-android@v3 fails on
+      # the retired "tools" package, so only the needed platform is installed.
       - name: Install Android SDK platform
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Build native debug APK
