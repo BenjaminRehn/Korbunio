@@ -129,13 +129,19 @@ class OfficialEdekaSource:
                 return candidate
         return ""
 
-    def _select_market(
+    # How many markets are tried before giving up. The market search already
+    # returns the nearest ones first, so a handful covers the surrounding area
+    # without hammering the API.
+    MAX_MARKET_CANDIDATES = 6
+
+    def _candidate_markets(
         self,
         session: Any,
         postal_code: str,
         retailer: str,
         market_filter: MarketFilter | None,
-    ) -> tuple[str, str, str]:
+    ) -> list[tuple[str, str, str]]:
+        """Markets to try, best first: exact postal code, then the nearest."""
         response = session.get(
             self.MARKET_API,
             params={"limit": 100, "searchstring": postal_code},
@@ -152,29 +158,44 @@ class OfficialEdekaSource:
         usable = [market for market in markets if self._market_id(market)]
         if market_filter is not None:
             usable = [market for market in usable if market_filter(market)]
-
-        exact = [market for market in usable if self._postal(market) == postal_code]
-        market = exact[0] if exact else usable[0] if usable else None
-        if market is None:
+        if not usable:
             raise ToolError(f"{retailer} fand für PLZ {postal_code} keinen nutzbaren Markt")
 
-        market_id = self._market_id(market)
-        market_label = clean_text(
-            market.get("name")
-            or market.get("title")
-            or market.get("displayName")
-            or f"{retailer} {postal_code}"
-        )
-        market_url = clean_text(
-            market.get("url")
-            or market.get("marketUrl")
-            or market.get("detailUrl")
-        )
-        if market_url:
-            market_url = urljoin("https://www.edeka.de", market_url)
-        else:
-            market_url = "https://www.edeka.de/marktsuche.jsp"
-        return market_id, market_label, market_url
+        exact = [market for market in usable if self._postal(market) == postal_code]
+        rest = [market for market in usable if self._postal(market) != postal_code]
+        candidates: list[tuple[str, str, str]] = []
+        seen: set[str] = set()
+        for market in (exact + rest)[: self.MAX_MARKET_CANDIDATES]:
+            market_id = self._market_id(market)
+            if market_id in seen:
+                continue
+            seen.add(market_id)
+            market_label = clean_text(
+                market.get("name")
+                or market.get("title")
+                or market.get("displayName")
+                or f"{retailer} {postal_code}"
+            )
+            market_url = clean_text(
+                market.get("url")
+                or market.get("marketUrl")
+                or market.get("detailUrl")
+            )
+            if market_url:
+                market_url = urljoin("https://www.edeka.de", market_url)
+            else:
+                market_url = "https://www.edeka.de/marktsuche.jsp"
+            candidates.append((market_id, market_label, market_url))
+        return candidates
+
+    def _select_market(
+        self,
+        session: Any,
+        postal_code: str,
+        retailer: str,
+        market_filter: MarketFilter | None,
+    ) -> tuple[str, str, str]:
+        return self._candidate_markets(session, postal_code, retailer, market_filter)[0]
 
     def _load_offers(
         self,
@@ -265,31 +286,46 @@ class OfficialEdekaSource:
         offer_week: str = "current",
     ) -> list[Offer]:
         session = self._session()
-        market_id, market_label, market_url = self._select_market(
+        candidates = self._candidate_markets(
             session,
             postal_code,
             retailer,
             market_filter,
         )
-        offers, raw_count, skipped_zero = self._load_offers(
-            session,
-            retailer=retailer,
-            market_id=market_id,
-            market_url=market_url,
-            reference_date=offer_week_reference(offer_week) if normalize_offer_week(offer_week) == "next" else None,
+        reference_date = (
+            offer_week_reference(offer_week)
+            if normalize_offer_week(offer_week) == "next"
+            else None
         )
+        problems: list[str] = []
+        for market_id, market_label, market_url in candidates:
+            try:
+                offers, raw_count, skipped_zero = self._load_offers(
+                    session,
+                    retailer=retailer,
+                    market_id=market_id,
+                    market_url=market_url,
+                    reference_date=reference_date,
+                )
+            except ToolError as exc:
+                # One market failing must not hide the others nearby.
+                problems.append(f"Markt {market_id}: {exc}")
+                continue
+            if not offers:
+                problems.append(f"Markt {market_id}: keine preislich verwertbaren Angebote")
+                continue
 
-        self.last_market_id = market_id
-        self.last_market_label = market_label
-        self.last_market_url = market_url
-        self.last_raw_count = raw_count
-        self.last_skipped_zero_price = skipped_zero
+            self.last_market_id = market_id
+            self.last_market_label = market_label
+            self.last_market_url = market_url
+            self.last_raw_count = raw_count
+            self.last_skipped_zero_price = skipped_zero
+            return offers
 
-        if not offers:
-            raise ToolError(
-                f"{retailer} Markt {market_id} lieferte keine preislich verwertbaren Angebote"
-            )
-        return offers
+        raise ToolError(
+            f"{retailer}: {len(candidates)} Märkte in der Nähe von {postal_code} geprüft, "
+            f"keiner lieferte Angebote mit Preisen ({'; '.join(problems[:3])})"
+        )
 
     def load(self, postal_code: str, offer_week: str = "current") -> list[Offer]:
         return self._load_retailer(postal_code, "EDEKA", offer_week=offer_week)
