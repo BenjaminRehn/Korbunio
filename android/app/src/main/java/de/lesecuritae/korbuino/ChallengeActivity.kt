@@ -1,6 +1,7 @@
 package de.lesecuritae.korbuino
 
 import android.app.Activity
+import android.os.Build
 import android.os.Bundle
 import android.net.Uri
 import android.os.Handler
@@ -9,6 +10,7 @@ import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
+import android.view.WindowInsets
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.LinearLayout
@@ -57,6 +59,7 @@ class ChallengeActivity : Activity() {
             }
         }
         lateinit var webView: WebView
+        var edekaBridge: EdekaBridge? = null
         val done = Button(this).apply {
             doneButton = this
             isEnabled = false
@@ -72,9 +75,9 @@ class ChallengeActivity : Activity() {
                 if (isEdeka) {
                     isEnabled = false
                     text = "EDEKA-Angebote werden geladen …"
-                    // The bridge exists only while this one fetch runs, and only the
-                    // JSON it delivers is kept; see EdekaHandoffStore.
-                    webView.addJavascriptInterface(EdekaBridge(edekaPostalCode!!), EdekaWebFetchScript.BRIDGE_NAME)
+                    // The bridge is registered before the page loads (WebView only exposes
+                    // it to pages loaded afterwards) but accepts data only after this tap.
+                    edekaBridge?.armed = true
                     webView.evaluateJavascript(EdekaWebFetchScript.build(edekaPostalCode), null)
                 } else if (supportsRenderedHandoff) {
                     webView.evaluateJavascript("document.documentElement.outerHTML") { encoded ->
@@ -101,19 +104,44 @@ class ChallengeActivity : Activity() {
             setPadding(24, 18, 24, 18)
         }
         webView = web
+        if (isEdeka) {
+            edekaBridge = EdekaBridge(edekaPostalCode!!).also {
+                web.addJavascriptInterface(it, EdekaWebFetchScript.BRIDGE_NAME)
+            }
+        }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(note)
             addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
             addView(done)
+            // targetSdk 35 draws edge-to-edge; keep content clear of the system bars.
+            setOnApplyWindowInsetsListener { view, insets ->
+                val bars = if (Build.VERSION.SDK_INT >= 30) {
+                    insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime()).let {
+                        intArrayOf(it.left, it.top, it.right, it.bottom)
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    intArrayOf(
+                        insets.systemWindowInsetLeft, insets.systemWindowInsetTop,
+                        insets.systemWindowInsetRight, insets.systemWindowInsetBottom,
+                    )
+                }
+                view.setPadding(bars[0], bars[1], bars[2], bars[3])
+                WindowInsets.CONSUMED
+            }
         })
         web.loadUrl(url)
     }
 
     /** Receives the JSON the fetch script produced inside the EDEKA page. */
     private inner class EdekaBridge(private val postalCode: String) {
+        @Volatile var armed = false
+
         @JavascriptInterface
         fun deliver(json: String) {
+            if (!armed) return
+            armed = false
             EdekaHandoffStore.publish(postalCode, json)
             Handler(Looper.getMainLooper()).post {
                 setResult(RESULT_OK)
