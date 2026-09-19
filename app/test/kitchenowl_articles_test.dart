@@ -85,6 +85,7 @@ void main() {
     for (final (product, expected) in const [
       ('GUT&GÜNSTIG Weizenbrötchen / Schrippen', 'Weizenbrötchen'),
       ('JA! Weizenbrötchen 6 Stück', 'Weizenbrötchen'),
+      ('GUT & GÜNSTIG - Kaiserbrötchen', 'Kaiserbrötchen'),
       ('REWE Beste Wahl Orangen 1,5 kg', 'Beste Wahl Orangen'),
       ('Bio Rinderhackfleisch aus der Region 400 g', 'Bio Rinderhackfleisch'),
       ('Joghurt mild versch. Sorten 500 g', 'Joghurt mild'),

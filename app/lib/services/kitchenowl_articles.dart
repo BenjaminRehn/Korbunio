@@ -34,6 +34,7 @@ final _packWord = RegExp(
 );
 
 final _letter = RegExp(r'\p{L}', unicode: true);
+final _hasContent = RegExp(r'[\p{L}\p{N}]', unicode: true);
 
 const maxArticleLength = 200;
 const maxNoteLength = 300;
@@ -80,7 +81,11 @@ String shortenOfferName(String product) {
       break;
     }
   }
-  var kept = words.where((word) => !_isBrandToken(word)).toList();
+  // Separators left behind by a removed label ("GUT & GÜNSTIG - Brötchen")
+  // are no part of a name.
+  var kept = words
+      .where((word) => _hasContent.hasMatch(word) && !_isBrandToken(word))
+      .toList();
   if (kept.isEmpty) kept = words;
   // A pack size belongs in the note, not in the article name.
   while (kept.length > 1 && _packWord.hasMatch(kept.last)) {
