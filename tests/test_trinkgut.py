@@ -70,16 +70,14 @@ def test_trinkgut_nearest_market_selected_when_no_exact_match(monkeypatch):
     assert "Nächstsuche" in source.last_discovery
 
 
-def test_trinkgut_fallback_numeric_zip_when_geocoding_fails(monkeypatch):
+def test_trinkgut_never_guesses_a_market_when_geocoding_fails(monkeypatch):
+    """A numerically close postal code can be far away; better no market than a wrong one."""
     source = OfficialTrinkgutSource(SimpleNamespace())
     monkeypatch.setattr(source, "_get_all_markets", lambda _session=None: SAMPLE_MARKETS)
     monkeypatch.setattr(source, "_postal_coordinates", lambda _code: None)
 
-    # 41239 is closest numerically to 41238 (difference 1)
-    _session, m_id, url, label, dist = source._find_market("41239", use_cache=False)
-    assert m_id == "market-1"
-    assert "Endt" in label
-    assert "PLZ-Annäherung" in source.last_discovery
+    with pytest.raises(ToolError, match="Standort der PLZ"):
+        source._find_market("41239", use_cache=False)
 
 
 def test_trinkgut_manual_market_id_selection(monkeypatch):
@@ -125,7 +123,8 @@ def test_trinkgut_markets_method_returns_distance(monkeypatch):
     monkeypatch.setattr(source, "_postal_coordinates", lambda _code: (51.2217, 6.7762))
 
     markets = source.markets("40213")
-    assert len(markets) == 3
+    # Celle is far outside the default radius and is not offered.
+    assert [m["market_id"] for m in markets] == ["market-2", "market-1"]
     # First should be closest
     assert markets[0]["market_id"] == "market-2"
     assert "distance_km" in markets[0]
@@ -252,3 +251,203 @@ def test_trinkgut_load_with_mock_session(monkeypatch):
     assert wasser.category == "Wasser"
     assert wasser.price == 4.99
     assert wasser.deposit == 3.30
+
+
+BERLIN = (52.5200, 13.4050)  # Celle (market-3) is ~200 km away, the others further
+
+
+def test_trinkgut_refuses_a_market_beyond_the_maximum_distance(monkeypatch):
+    source = OfficialTrinkgutSource(SimpleNamespace())
+    monkeypatch.setattr(source, "_get_all_markets", lambda _session=None: SAMPLE_MARKETS)
+    monkeypatch.setattr(source, "_postal_coordinates", lambda _code: BERLIN)
+
+    with pytest.raises(ToolError) as error:
+        source._find_market("10115", use_cache=False)
+    message = str(error.value)
+    assert "Umkreis von 40 km" in message
+    assert "Celle" in message  # names the nearest one and how far it is
+    assert "km)" in message
+
+
+def test_trinkgut_distance_limit_is_configurable(monkeypatch):
+    source = OfficialTrinkgutSource(SimpleNamespace(), max_distance_km=300)
+    monkeypatch.setattr(source, "_get_all_markets", lambda _session=None: SAMPLE_MARKETS)
+    monkeypatch.setattr(source, "_postal_coordinates", lambda _code: BERLIN)
+
+    _session, m_id, _url, _label, distance = source._find_market("10115", use_cache=False)
+    assert m_id == "market-3"
+    assert distance is not None and 150 < distance < 300
+
+
+def test_trinkgut_limit_is_kept_within_sensible_bounds():
+    assert OfficialTrinkgutSource(SimpleNamespace(), max_distance_km=0).max_distance_km == 5
+    assert OfficialTrinkgutSource(SimpleNamespace(), max_distance_km=10_000).max_distance_km == 300
+
+
+def test_trinkgut_an_old_cached_market_cannot_bypass_the_distance_limit(tmp_path, monkeypatch):
+    source = OfficialTrinkgutSource(SimpleNamespace(), cache_dir=tmp_path)
+    monkeypatch.setattr(source, "_get_all_markets", lambda _session=None: SAMPLE_MARKETS)
+    monkeypatch.setattr(source, "_postal_coordinates", lambda _code: BERLIN)
+    source._cache_market("10115", "market-3", "https://www.trinkgut.de/markt/isermann", "trinkgut Isermann", 200.0)
+
+    with pytest.raises(ToolError, match="Umkreis"):
+        source._find_market("10115", use_cache=True)
+
+
+def test_trinkgut_market_list_is_empty_when_the_location_is_unknown(monkeypatch):
+    source = OfficialTrinkgutSource(SimpleNamespace())
+    monkeypatch.setattr(source, "_get_all_markets", lambda _session=None: SAMPLE_MARKETS)
+    monkeypatch.setattr(source, "_postal_coordinates", lambda _code: None)
+    assert source.markets("99999") == []
+
+
+def test_trinkgut_coordinates_are_asked_for_once_per_postal_code():
+    calls = []
+
+    class Http:
+        def get_bytes(self, url, headers=None):
+            calls.append(url)
+            return b'[{"lat": "51.2", "lon": "6.7"}]'
+
+    source = OfficialTrinkgutSource(SimpleNamespace(http=Http()))
+    assert source._postal_coordinates("40213") == (51.2, 6.7)
+    assert source._postal_coordinates("40213") == (51.2, 6.7)
+    assert len(calls) == 1
+
+
+# ---------------------------------------------------------------- foreign URLs
+
+
+def test_trinkgut_only_ever_requests_its_own_host():
+    ok = OfficialTrinkgutSource._is_trinkgut_url
+    assert ok("https://www.trinkgut.de/angebot/x")
+    assert ok("https://trinkgut.de/angebot/x")
+    assert not ok("http://www.trinkgut.de/angebot/x")  # no plain http
+    assert not ok("https://evil.example/angebot/x")
+    assert not ok("https://www.trinkgut.de.evil.example/x")
+    assert not ok("https://user@evil.example/x")
+    assert not ok("file:///etc/passwd")
+    assert not ok("")
+
+
+def test_trinkgut_a_foreign_product_link_is_replaced_by_the_offers_page():
+    source = OfficialTrinkgutSource(SimpleNamespace())
+    html = """
+    <div class="product-box">
+      <a class="product-image-link" href="https://evil.example/steal"><img class="product-image" src="https://media.trinkgut.de/x.png"/></a>
+      <p class="product-price"><span>9.99</span></p>
+      <p class="product-name">Testbier</p>
+      <p class="product-description">20 x 0,5 l zzgl. € 3.10 Pfand</p>
+    </div>
+    """
+    card = BeautifulSoup(html, "html.parser").select_one(".product-box")
+    offer = source._parse_card(
+        card, index=1, category="Bier", market_id="m", market_url="https://www.trinkgut.de/markt/x",
+        validity_label="", valid_from=None, valid_until=None,
+    )
+    assert offer is not None
+    assert offer.product_url == OfficialTrinkgutSource.OFFERS_URL
+
+
+def test_trinkgut_a_foreign_market_link_is_replaced(monkeypatch):
+    markets = [dict(SAMPLE_MARKETS[0], detailURL="https://evil.example/markt")]
+    source = OfficialTrinkgutSource(SimpleNamespace())
+    monkeypatch.setattr(source, "_get_all_markets", lambda _session=None: markets)
+    _s, _id, url, _label, _d = source._find_market("41238", use_cache=False)
+    assert url == OfficialTrinkgutSource.MARKETS_URL
+
+
+# ------------------------------------------------------------- deposit lookups
+
+
+def _truncated_offer(index):
+    from supermarkt.models import Offer
+
+    return Offer(
+        offer_id=f"o{index}", retailer="trinkgut", category="Bier", name=f"Bier {index}", brand="",
+        description="20 x 0,5 l zzgl. € 3...", price=9.99, base_price=None, base_unit="", pack_signature="",
+        validity_label="", match_key=f"k{index}", source_url="https://www.trinkgut.de/angebote/",
+        product_url=f"https://www.trinkgut.de/angebot/bier-{index}", minimum_quantity=2, coverage_note="keep",
+    )
+
+
+class _CountingSession:
+    def __init__(self):
+        self.urls = []
+
+    def get(self, url, timeout):
+        self.urls.append(url)
+
+        class Response:
+            status_code = 200
+            text = '<div itemprop="description">20 x 0,5 l zzgl. € 3.10 Pfand</div>'
+
+        return Response()
+
+
+def test_trinkgut_deposit_is_read_once_and_then_remembered():
+    source = OfficialTrinkgutSource(SimpleNamespace())
+    session = _CountingSession()
+    offers = source._enrich_deposits([_truncated_offer(1), _truncated_offer(2)], session)
+    assert [o.deposit for o in offers] == [3.10, 3.10]
+    assert len(session.urls) == 2
+
+    again = source._enrich_deposits([_truncated_offer(1), _truncated_offer(2)], session)
+    assert [o.deposit for o in again] == [3.10, 3.10]
+    assert len(session.urls) == 2, "remembered deposits must not be requested again"
+
+
+def test_trinkgut_enriching_keeps_every_other_field_of_the_offer():
+    source = OfficialTrinkgutSource(SimpleNamespace())
+    (offer,) = source._enrich_deposits([_truncated_offer(1)], _CountingSession())
+    assert offer.deposit == 3.10
+    assert offer.minimum_quantity == 2 and offer.coverage_note == "keep"
+
+
+def test_trinkgut_remembered_deposits_survive_a_restart(tmp_path):
+    first = OfficialTrinkgutSource(SimpleNamespace(), cache_dir=tmp_path)
+    first._enrich_deposits([_truncated_offer(1)], _CountingSession())
+
+    second = OfficialTrinkgutSource(SimpleNamespace(), cache_dir=tmp_path)
+    session = _CountingSession()
+    (offer,) = second._enrich_deposits([_truncated_offer(1)], session)
+    assert offer.deposit == 3.10
+    assert session.urls == []
+
+
+def test_trinkgut_an_expired_deposit_is_read_again(monkeypatch):
+    source = OfficialTrinkgutSource(SimpleNamespace(), deposit_cache_ttl_seconds=300)
+    session = _CountingSession()
+    source._enrich_deposits([_truncated_offer(1)], session)
+    url = _truncated_offer(1).product_url
+    source._deposit_cache[url] = (source._deposit_cache[url][0] - 301, 3.10)
+    source._enrich_deposits([_truncated_offer(1)], session)
+    assert len(session.urls) == 2
+
+
+def test_trinkgut_number_of_parallel_requests_is_configurable(monkeypatch):
+    import concurrent.futures
+
+    seen = []
+    real = concurrent.futures.ThreadPoolExecutor
+
+    class Recording(real):
+        def __init__(self, max_workers=None, *a, **k):
+            seen.append(max_workers)
+            super().__init__(max_workers=max_workers, *a, **k)
+
+    monkeypatch.setattr(concurrent.futures, "ThreadPoolExecutor", Recording)
+    source = OfficialTrinkgutSource(SimpleNamespace(), deposit_workers=2)
+    source._enrich_deposits([_truncated_offer(i) for i in range(1, 8)], _CountingSession())
+    assert seen == [2]
+    assert OfficialTrinkgutSource(SimpleNamespace(), deposit_workers=99).deposit_workers == 12
+    assert OfficialTrinkgutSource(SimpleNamespace(), deposit_workers=0).deposit_workers == 1
+
+
+def test_trinkgut_never_requests_a_detail_page_on_another_host():
+    source = OfficialTrinkgutSource(SimpleNamespace())
+    offer = _truncated_offer(1)
+    offer.product_url = "https://evil.example/steal"
+    session = _CountingSession()
+    source._enrich_deposits([offer], session)
+    assert session.urls == []

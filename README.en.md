@@ -114,7 +114,7 @@ Korbunio currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufla
 
 REWE, EDEKA, Marktkauf, Kaufland, GLOBUS, and the applicable ALDI region are loaded preferentially from direct retailer sources. ALDI Süd uses its structured official weekly publication as its complete primary source. ALDI Nord takes price, unit price, explicitly published deposit, and product image from its official offer data. If the ALDI region cannot be determined unambiguously and no explicit selection was made, ALDI is omitted and a warning is shown.
 
-For trinkgut, the list of stores is downloaded from the official trinkgut website or taken from cached data. This list is used to provide the deposit amount for each product.
+For trinkgut, the store list is downloaded from the official trinkgut website (or taken from cached data) and the store with the postal code, or else the nearest one, is used. A store further away than `SUPERMARKT_TRINKGUT_MAX_DISTANCE_KM` (default 40 km) is not presented as local: the official source reports that there is none nearby and the regional Marktguru data is used instead. Where the listing cuts the deposit off, the product page is read for it (at most `SUPERMARKT_TRINKGUT_DEPOSIT_FETCH_WORKERS` at a time) and the value is remembered.
 
 Lidl, PENNY, Netto Marken-Discount, and famila Nordwest are loaded from regional Marktguru data. Netto schwarz, Rossmann, Müller, and HOL’AB! use separate source-specific data paths. Korbunio combines a broad regional search with supplementary retailer-name searches where applicable; the name queries alone are never treated as a complete catalogue.
 
@@ -275,7 +275,10 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_IMAGE_CACHE_TTL_SECONDS`
 - `SUPERMARKT_IMAGE_CACHE_MAX_BYTES`
 - `SUPERMARKT_IMAGE_MAX_FILE_BYTES`
+- `SUPERMARKT_TRINKGUT_MAX_DISTANCE_KM`
 - `SUPERMARKT_TRINKGUT_DEPOSIT_FETCH_WORKERS`
+- `SUPERMARKT_TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS`
+- `SUPERMARKT_TRINKGUT_STORE_CACHE_TTL_SECONDS`
 - `SUPERMARKT_TRINKGUT_CACHE_DIR`
 
 

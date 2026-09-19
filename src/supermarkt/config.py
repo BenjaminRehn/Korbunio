@@ -61,6 +61,15 @@ REWE_STORE_CACHE_TTL_SECONDS = _env_int(
 TRINKGUT_STORE_CACHE_TTL_SECONDS = _env_int(
     "SUPERMARKT_TRINKGUT_STORE_CACHE_TTL_SECONDS", 86400, 300, 7 * 86400
 )
+# A market further away than this is not "the trinkgut nearby": better report
+# that there is none than to present another region's offers as local ones.
+TRINKGUT_MAX_DISTANCE_KM = _env_int("SUPERMARKT_TRINKGUT_MAX_DISTANCE_KM", 40, 5, 300)
+# The detail pages are only read for offers whose deposit is cut off in the
+# listing; a few at a time and remembered, so a search does not hammer the site.
+TRINKGUT_DEPOSIT_FETCH_WORKERS = _env_int("SUPERMARKT_TRINKGUT_DEPOSIT_FETCH_WORKERS", 4, 1, 12)
+TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS = _env_int(
+    "SUPERMARKT_TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS", 86400, 300, 7 * 86400
+)
 
 IMAGE_CACHE_TTL_SECONDS = _env_int(
     "SUPERMARKT_IMAGE_CACHE_TTL_SECONDS", 604800, 3600, 30 * 86400

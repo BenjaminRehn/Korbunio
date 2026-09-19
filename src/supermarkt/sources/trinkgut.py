@@ -5,11 +5,12 @@ import re
 import threading
 import time
 import unicodedata
+from dataclasses import replace
 from datetime import date, datetime
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode, urljoin, urlparse
 
 from ..common import (
     build_match_key,
@@ -43,8 +44,16 @@ class OfficialTrinkgutSource:
         cache_dir: Optional[Path] = None,
         store_cache_ttl_seconds: int = 86400,
         markets_cache_ttl_seconds: int = 86400,
+        max_distance_km: float = 40.0,
+        deposit_workers: int = 4,
+        deposit_cache_ttl_seconds: int = 86400,
     ) -> None:
         self.locator = locator
+        self.max_distance_km = max(5.0, min(float(max_distance_km), 300.0))
+        self.deposit_workers = max(1, min(int(deposit_workers), 12))
+        self.deposit_cache_ttl_seconds = max(300, min(int(deposit_cache_ttl_seconds), 7 * 86400))
+        self._deposit_cache: dict[str, tuple[float, Optional[float]]] = {}
+        self._coordinate_cache: dict[str, tuple[float, float]] = {}
         self.timeout_seconds = max(10, min(int(timeout_seconds), 90))
         self.cache_dir = Path(cache_dir).expanduser() if cache_dir is not None else None
         self.store_cache_ttl_seconds = max(300, min(int(store_cache_ttl_seconds), 7 * 86400))
@@ -170,6 +179,21 @@ class OfficialTrinkgutSource:
             if mapping.pop(code, None) is not None:
                 self._write_store_map(mapping)
 
+    ALLOWED_HOSTS = frozenset({"www.trinkgut.de", "trinkgut.de"})
+
+    @classmethod
+    def _is_trinkgut_url(cls, value: str) -> bool:
+        """Only https URLs on trinkgut's own host may ever be requested."""
+        try:
+            parsed = urlparse(value)
+        except ValueError:
+            return False
+        return parsed.scheme == "https" and (parsed.hostname or "").lower() in cls.ALLOWED_HOSTS
+
+    @classmethod
+    def _safe_url(cls, value: str, fallback: str) -> str:
+        return value if value and cls._is_trinkgut_url(value) else fallback
+
     def _session(self):
         try:
             from curl_cffi import requests as curl_requests
@@ -221,6 +245,9 @@ class OfficialTrinkgutSource:
 
     def _postal_coordinates(self, postal_code: str) -> Optional[tuple[float, float]]:
         """Resolve latitude and longitude for a postal code via PostalCodeLocator or Nominatim."""
+        remembered = self._coordinate_cache.get(postal_code)
+        if remembered is not None:
+            return remembered
         http = getattr(self.locator, "http", None)
         if http is not None and hasattr(http, "get_bytes"):
             query = urlencode(
@@ -242,6 +269,7 @@ class OfficialTrinkgutSource:
                     lat = float(payload[0].get("lat"))
                     lon = float(payload[0].get("lon"))
                     if -90 <= lat <= 90 and -180 <= lon <= 180:
+                        self._coordinate_cache[postal_code] = (lat, lon)
                         return lat, lon
             except Exception:
                 pass
@@ -333,7 +361,8 @@ class OfficialTrinkgutSource:
             cached = self._cached_market(postal_code)
             if cached is not None:
                 cached_id, market_url, label, distance_km = cached
-                return self._session(), cached_id, market_url, label, distance_km
+                if distance_km is None or distance_km <= self.max_distance_km:
+                    return self._session(), cached_id, self._safe_url(market_url, self.MARKETS_URL), label, distance_km
 
         session = self._session()
         all_markets = self._get_all_markets(session)
@@ -347,7 +376,7 @@ class OfficialTrinkgutSource:
             city = clean_text(selected.get("city"))
             zip_code = clean_text(selected.get("zipCode"))
             label = f"trinkgut {name} ({zip_code} {city})".strip()
-            url = clean_text(selected.get("detailURL")) or self.MARKETS_URL
+            url = self._safe_url(clean_text(selected.get("detailURL")), self.MARKETS_URL)
             self.last_discovery = "Manuelle Auswahl"
             self.last_distance_km = None
             return session, m_id, url, label, None
@@ -361,52 +390,45 @@ class OfficialTrinkgutSource:
             city = clean_text(selected.get("city"))
             zip_code = clean_text(selected.get("zipCode"))
             label = f"trinkgut {name} ({zip_code} {city})".strip()
-            url = clean_text(selected.get("detailURL")) or self.MARKETS_URL
+            url = self._safe_url(clean_text(selected.get("detailURL")), self.MARKETS_URL)
             self.last_discovery = "trinkgut Marktsuche (exakt)"
             self.last_distance_km = 0.0
             self._cache_market(postal_code, m_id, url, label, 0.0)
             return session, m_id, url, label, 0.0
 
-        # 2. No exact match for postal code: select geographically nearest market
+        # 2. No exact match for postal code: the geographically nearest market,
+        #    but only within the configured distance. Never guess a market from
+        #    numerically close postal codes or take an arbitrary one: those can
+        #    be hundreds of kilometres away and would be shown as local offers.
         coords = self._postal_coordinates(postal_code)
-        selected = None
-        selected_distance: Optional[float] = None
+        if coords is None:
+            raise ToolError(
+                f"trinkgut: kein Markt mit der PLZ {postal_code}, und der Standort der PLZ "
+                "ließ sich nicht bestimmen"
+            )
 
-        if coords is not None:
-            ranked: list[tuple[float, dict[str, Any]]] = []
-            for m in all_markets:
-                try:
-                    m_lat = float(m.get("latitude", 0))
-                    m_lon = float(m.get("longitude", 0))
-                except (ValueError, TypeError):
-                    continue
-                if m_lat == 0 and m_lon == 0:
-                    continue
-                d = self._distance_km(coords, (m_lat, m_lon))
-                ranked.append((d, m))
-
-            if ranked:
-                ranked.sort(key=lambda item: item[0])
-                selected_distance, selected = ranked[0]
-                self.last_discovery = f"trinkgut Nächstsuche ({selected_distance:.1f} km)"
-
-        if selected is None:
-            # Fallback: nearest numeric zip code difference
+        ranked: list[tuple[float, dict[str, Any]]] = []
+        for m in all_markets:
             try:
-                target_num = int(postal_code)
-                ranked_zip = sorted(
-                    all_markets,
-                    key=lambda m: abs(int(clean_text(m.get("zipCode")) or "99999") - target_num)
-                    if (clean_text(m.get("zipCode")) or "").isdigit()
-                    else 999999,
-                )
-                selected = ranked_zip[0]
-                self.last_discovery = "trinkgut PLZ-Annäherung"
-                selected_distance = None
-            except (ValueError, IndexError):
-                selected = all_markets[0]
-                self.last_discovery = "trinkgut Standardmarkt"
-                selected_distance = None
+                m_lat = float(m.get("latitude", 0))
+                m_lon = float(m.get("longitude", 0))
+            except (ValueError, TypeError):
+                continue
+            if m_lat == 0 and m_lon == 0:
+                continue
+            ranked.append((self._distance_km(coords, (m_lat, m_lon)), m))
+        if not ranked:
+            raise ToolError("trinkgut: die Marktliste enthält keine Standortdaten")
+
+        ranked.sort(key=lambda item: item[0])
+        selected_distance, selected = ranked[0]
+        if selected_distance > self.max_distance_km:
+            near_name = clean_text(selected.get("city")) or clean_text(selected.get("name"))
+            raise ToolError(
+                f"trinkgut: kein Markt im Umkreis von {self.max_distance_km:.0f} km um {postal_code} "
+                f"(nächster: {near_name}, {selected_distance:.0f} km)"
+            )
+        self.last_discovery = f"trinkgut Nächstsuche ({selected_distance:.1f} km)"
 
         m_id = clean_text(selected.get("id"))
         name = clean_text(selected.get("name"))
@@ -414,7 +436,7 @@ class OfficialTrinkgutSource:
         zip_code = clean_text(selected.get("zipCode"))
         dist_suffix = f" [{selected_distance:.1f} km]" if selected_distance is not None else ""
         label = f"trinkgut {name} ({zip_code} {city}){dist_suffix}".strip()
-        url = clean_text(selected.get("detailURL")) or self.MARKETS_URL
+        url = self._safe_url(clean_text(selected.get("detailURL")), self.MARKETS_URL)
         self.last_distance_km = selected_distance
         self._cache_market(postal_code, m_id, url, label, selected_distance)
         return session, m_id, url, label, selected_distance
@@ -427,7 +449,7 @@ class OfficialTrinkgutSource:
             return [
                 {
                     "market_id": clean_text(m.get("id")),
-                    "market_url": clean_text(m.get("detailURL")),
+                    "market_url": self._safe_url(clean_text(m.get("detailURL")), self.MARKETS_URL),
                     "label": f"trinkgut {clean_text(m.get('name'))} ({clean_text(m.get('zipCode'))} {clean_text(m.get('city'))})",
                     "distance_km": 0.0,
                     "street": clean_text(m.get("street")),
@@ -438,55 +460,33 @@ class OfficialTrinkgutSource:
             ]
 
         coords = self._postal_coordinates(postal_code)
-        if coords is not None:
-            ranked: list[tuple[float, dict[str, Any]]] = []
-            for m in all_markets:
-                try:
-                    m_lat = float(m.get("latitude", 0))
-                    m_lon = float(m.get("longitude", 0))
-                except (ValueError, TypeError):
-                    continue
-                if m_lat == 0 and m_lon == 0:
-                    continue
-                d = self._distance_km(coords, (m_lat, m_lon))
-                ranked.append((d, m))
-            ranked.sort(key=lambda item: item[0])
-            return [
-                {
-                    "market_id": clean_text(m.get("id")),
-                    "market_url": clean_text(m.get("detailURL")),
-                    "label": f"trinkgut {clean_text(m.get('name'))} ({clean_text(m.get('zipCode'))} {clean_text(m.get('city'))}) [{d:.1f} km]",
-                    "distance_km": round(d, 1),
-                    "street": clean_text(m.get("street")),
-                    "city": clean_text(m.get("city")),
-                    "zipCode": clean_text(m.get("zipCode")),
-                }
-                for d, m in ranked[:10]
-            ]
-
-        # Numeric fallback
-        try:
-            target_num = int(postal_code)
-            ranked_zip = sorted(
-                all_markets,
-                key=lambda m: abs(int(clean_text(m.get("zipCode")) or "99999") - target_num)
-                if (clean_text(m.get("zipCode")) or "").isdigit()
-                else 999999,
-            )
-            return [
-                {
-                    "market_id": clean_text(m.get("id")),
-                    "market_url": clean_text(m.get("detailURL")),
-                    "label": f"trinkgut {clean_text(m.get('name'))} ({clean_text(m.get('zipCode'))} {clean_text(m.get('city'))})",
-                    "distance_km": None,
-                    "street": clean_text(m.get("street")),
-                    "city": clean_text(m.get("city")),
-                    "zipCode": clean_text(m.get("zipCode")),
-                }
-                for m in ranked_zip[:10]
-            ]
-        except (ValueError, IndexError):
+        if coords is None:
             return []
+        ranked: list[tuple[float, dict[str, Any]]] = []
+        for m in all_markets:
+            try:
+                m_lat = float(m.get("latitude", 0))
+                m_lon = float(m.get("longitude", 0))
+            except (ValueError, TypeError):
+                continue
+            if m_lat == 0 and m_lon == 0:
+                continue
+            distance = self._distance_km(coords, (m_lat, m_lon))
+            if distance <= self.max_distance_km:
+                ranked.append((distance, m))
+        ranked.sort(key=lambda item: item[0])
+        return [
+            {
+                "market_id": clean_text(m.get("id")),
+                "market_url": self._safe_url(clean_text(m.get("detailURL")), self.MARKETS_URL),
+                "label": f"trinkgut {clean_text(m.get('name'))} ({clean_text(m.get('zipCode'))} {clean_text(m.get('city'))}) [{d:.1f} km]",
+                "distance_km": round(d, 1),
+                "street": clean_text(m.get("street")),
+                "city": clean_text(m.get("city")),
+                "zipCode": clean_text(m.get("zipCode")),
+            }
+            for d, m in ranked[:10]
+        ]
 
     @classmethod
     def _parse_validity(cls, soup: Any, reference_date: Optional[date] = None) -> tuple[Optional[date], Optional[date], str]:
@@ -544,7 +544,7 @@ class OfficialTrinkgutSource:
                 image_url = candidate
 
         link_node = card.select_one("a.product-image-link") or card.select_one("a[href]")
-        product_url = urljoin(self.BASE, clean_text(link_node.get("href"))) if link_node else self.OFFERS_URL
+        product_url = self._safe_url(urljoin(self.BASE, clean_text(link_node.get("href"))), self.OFFERS_URL) if link_node else self.OFFERS_URL
 
         slug_title = self._slug(title) or f"item-{index}"
         offer_id = f"trinkgut:{market_id}:{slug_title}:{index}"
@@ -572,6 +572,41 @@ class OfficialTrinkgutSource:
             valid_until=valid_until.isoformat() if valid_until else None,
         )
 
+    def _deposit_cache_path(self) -> Optional[Path]:
+        return self.cache_dir / "trinkgut-deposits.json" if self.cache_dir is not None else None
+
+    def _read_deposit_cache(self, now: float) -> None:
+        """Load remembered deposits from disk once and drop the expired ones."""
+        with self._cache_lock:
+            path = self._deposit_cache_path()
+            if path is not None and not self._deposit_cache and path.exists():
+                try:
+                    raw = json.loads(path.read_text(encoding="utf-8"))
+                    for url, entry in raw.items():
+                        if isinstance(entry, dict) and self._is_trinkgut_url(url):
+                            value = entry.get("deposit")
+                            self._deposit_cache[url] = (float(entry.get("at", 0)), float(value) if value is not None else None)
+                except (OSError, ValueError, TypeError):
+                    self._deposit_cache = {}
+            self._deposit_cache = {
+                url: entry
+                for url, entry in self._deposit_cache.items()
+                if now - entry[0] <= self.deposit_cache_ttl_seconds
+            }
+
+    def _write_deposit_cache(self) -> None:
+        path = self._deposit_cache_path()
+        if path is None:
+            return
+        with self._cache_lock:
+            payload = {url: {"at": at, "deposit": deposit} for url, (at, deposit) in self._deposit_cache.items()}
+            try:
+                temporary = path.with_suffix(".tmp")
+                temporary.write_text(json.dumps(payload), encoding="utf-8")
+                temporary.replace(path)
+            except OSError:
+                pass
+
     def _enrich_deposits(self, offers: list[Offer], session: Any) -> list[Offer]:
         """Parallel-fetch detail pages for offers where the listing description was
         server-truncated and no deposit could be parsed from the card HTML.
@@ -591,10 +626,25 @@ class OfficialTrinkgutSource:
         need_fetch: list[tuple[int, str]] = [
             (i, o.product_url)
             for i, o in enumerate(offers)
-            if o.deposit is None and o.product_url and o.product_url != self.OFFERS_URL and "..." in o.description
+            if o.deposit is None
+            and o.product_url
+            and o.product_url != self.OFFERS_URL
+            and self._is_trinkgut_url(o.product_url)
+            and "..." in o.description
         ]
-        if not need_fetch:
-            return offers
+        # What was read recently is not read again: a deposit does not change
+        # from one search to the next, and the site should not be hit for it.
+        now = time.time()
+        self._read_deposit_cache(now)
+        remembered: dict[int, Optional[float]] = {}
+        to_request: list[tuple[int, str]] = []
+        for idx, url in need_fetch:
+            hit = self._deposit_cache.get(url)
+            if hit is not None and now - hit[0] <= self.deposit_cache_ttl_seconds:
+                remembered[idx] = hit[1]
+            else:
+                to_request.append((idx, url))
+        need_fetch = to_request
 
         def fetch_full_desc(args: tuple[int, str]) -> tuple[int, Optional[float]]:
             idx, url = args
@@ -611,33 +661,20 @@ class OfficialTrinkgutSource:
             except Exception:
                 return idx, None
 
-        workers = min(12, len(need_fetch))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-            for idx, deposit in executor.map(fetch_full_desc, need_fetch):
-                if deposit is not None:
-                    old = offers[idx]
-                    offers[idx] = Offer(
-                        offer_id=old.offer_id,
-                        retailer=old.retailer,
-                        category=old.category,
-                        name=old.name,
-                        brand=old.brand,
-                        description=old.description,
-                        price=old.price,
-                        base_price=old.base_price,
-                        base_unit=old.base_unit,
-                        pack_signature=old.pack_signature,
-                        validity_label=old.validity_label,
-                        match_key=old.match_key,
-                        source_url=old.source_url,
-                        product_url=old.product_url,
-                        retailer_url=old.retailer_url,
-                        image_url=old.image_url,
-                        deposit=deposit,
-                        benefits=old.benefits,
-                        valid_from=old.valid_from,
-                        valid_until=old.valid_until,
-                    )
+        results: list[tuple[int, Optional[float]]] = list(remembered.items())
+        if need_fetch:
+            workers = max(1, min(self.deposit_workers, len(need_fetch)))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                fetched = list(executor.map(fetch_full_desc, need_fetch))
+            stamp = time.time()
+            for (idx, url), (_, deposit) in zip(need_fetch, fetched):
+                self._deposit_cache[url] = (stamp, deposit)
+            self._write_deposit_cache()
+            results.extend(fetched)
+        for idx, deposit in results:
+            if deposit is not None:
+                old = offers[idx]
+                offers[idx] = replace(old, deposit=deposit)
         return offers
 
     def load(

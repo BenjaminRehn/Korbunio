@@ -25,6 +25,9 @@ from .config import (
     REWE_CACHE_DIR,
     REWE_STORE_CACHE_TTL_SECONDS,
     TRINKGUT_CACHE_DIR,
+    TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS,
+    TRINKGUT_DEPOSIT_FETCH_WORKERS,
+    TRINKGUT_MAX_DISTANCE_KM,
     TRINKGUT_STORE_CACHE_TTL_SECONDS,
     MARKTGURU_PAGE_SIZE,
     MAX_WORKERS,
@@ -81,6 +84,9 @@ class SourceLoader:
             TIMEOUT_SECONDS,
             cache_dir=TRINKGUT_CACHE_DIR,
             store_cache_ttl_seconds=TRINKGUT_STORE_CACHE_TTL_SECONDS,
+            max_distance_km=TRINKGUT_MAX_DISTANCE_KM,
+            deposit_workers=TRINKGUT_DEPOSIT_FETCH_WORKERS,
+            deposit_cache_ttl_seconds=TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS,
         )
         self.mapper = OfferMapper()
 
