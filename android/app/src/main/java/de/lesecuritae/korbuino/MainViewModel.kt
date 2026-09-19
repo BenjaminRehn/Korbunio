@@ -276,15 +276,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // KitchenOwl synchronisation is intentionally idempotent:
                     // do not add an article that is already on the target list.
                     val existing = client.existingItems(target.id).map { it.trim().lowercase() }.toMutableSet()
+                    var added = 0
+                    var total = 0
                     database.shoppingListDao().allItems().forEach { item ->
                         val product = database.productDao().find(listOf(item.productId)).firstOrNull()
                         val name = product?.name?.trim().orEmpty()
-                        if (name.isNotBlank() && existing.add(name.lowercase())) {
-                            client.addItem(target.id, name, "Menge: ${item.quantity}")
+                        if (name.isBlank()) return@forEach
+                        total++
+                        if (existing.add(name.lowercase())) {
+                            // The retailer the article was entered for travels in the note.
+                            val note = listOf("Menge: ${item.quantity}", item.note.takeIf { it.isNotBlank() }?.let { "bei $it" })
+                                .filterNotNull().joinToString(" · ")
+                            client.addItem(target.id, name, note)
+                            added++
                         }
                     }
+                    Triple(added, total, target.label)
                 }
-            }.onSuccess { _state.value = _state.value.copy(message = "Einkaufsliste zu ${target.label} übertragen") }
+            }.onSuccess { (added, total, label) ->
+                _state.value = _state.value.copy(
+                    message = when {
+                        total == 0 -> "Die Einkaufsliste ist leer, nichts zu übertragen"
+                        added == 0 -> "Alle $total Artikel sind schon auf $label"
+                        else -> "$added Artikel zu $label übertragen"
+                    },
+                )
+            }
                 .onFailure { error -> _state.value = _state.value.copy(message = "KitchenOwl-Sync: ${error.message}") }
         }
     }
