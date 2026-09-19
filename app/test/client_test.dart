@@ -27,7 +27,7 @@ void main() {
   });
 
   group('connection security', () {
-    test('never sends a Korbunio token over plain HTTP', () {
+    test('never sends a Korbuino token over plain HTTP', () {
       expect(
         KorbunioClient.connectionSecurityError('http://korb.example', 'secret'),
         isNotNull,
@@ -61,7 +61,7 @@ void main() {
       expect(await client.createAppToken(), 'personal-app-token');
       expect(request.url.path, '/api/v1/access-tokens');
       expect(request.headers['Authorization'], 'Bearer admin-secret');
-      expect(jsonDecode(request.body)['label'], 'Korbunio Android');
+      expect(jsonDecode(request.body)['label'], 'Korbuino Android');
     });
   });
 

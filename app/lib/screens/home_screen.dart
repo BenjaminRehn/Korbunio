@@ -326,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final normalized = KorbunioClient.normalizeBaseUrl(_server.text);
     if (normalized.isEmpty) {
       setState(
-        () => _error = 'Bitte die Adresse deines Korbunio-Servers eingeben.',
+        () => _error = 'Bitte die Adresse deines Korbuino-Servers eingeben.',
       );
       return;
     }
@@ -351,7 +351,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       switch (await client.check()) {
         case ServerCheck.notKorbunio:
           setState(
-            () => _error = 'Unter dieser Adresse antwortet kein Korbunio.',
+            () => _error = 'Unter dieser Adresse antwortet kein Korbuino.',
           );
           return;
         case ServerCheck.needsApiKey:
@@ -681,7 +681,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 6),
           Text(
-            'Adresse deiner Korbunio-Instanz. Die App rechnet nichts selbst, '
+            'Adresse deiner Korbuino-Instanz. Die App rechnet nichts selbst, '
             'sie zeigt den Vergleich deines Servers.',
             style: TextStyle(color: colors.muted, fontSize: 14),
           ),

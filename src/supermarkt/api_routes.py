@@ -120,7 +120,7 @@ def aldi_markets(postal_code: str = Query(min_length=5, max_length=5, pattern=r"
     return {"postal_code": postal_code, "markets": markets, "count": len(markets), "source": "OpenStreetMap/Nominatim"}
 
 
-@router.get("/api/v1/markets", summary="Belegte Märkte der Korbunio-Händler auflösen", include_in_schema=False)
+@router.get("/api/v1/markets", summary="Belegte Märkte der Korbuino-Händler auflösen", include_in_schema=False)
 def retailer_markets(
     postal_code: str = Query(min_length=5, max_length=5, pattern=r"^\d{5}$"),
     retailers: list[str] = Query(default=[], max_length=20),

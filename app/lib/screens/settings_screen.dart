@@ -68,13 +68,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return _show(
           check == ServerCheck.needsApiKey
               ? 'API-Token fehlt oder wurde abgelehnt.'
-              : 'Unter dieser Adresse antwortet kein Korbunio.',
+              : 'Unter dieser Adresse antwortet kein Korbuino.',
         );
       }
       await widget.settings.setServerUrl(url);
       await widget.settings.setApiKey(token);
       _server.text = url;
-      _show('Korbunio-Server verbunden.');
+      _show('Korbuino-Server verbunden.');
     } on KorbunioException catch (error) {
       _show(error.message);
     } finally {
@@ -213,7 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const Divider(height: 40),
         const Text(
-          'Eigener Korbunio-Server',
+          'Eigener Korbuino-Server',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
@@ -264,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Die App verbindet sich direkt mit deiner KitchenOwl-Instanz. Der Token wird nicht an den Korbunio-Server übertragen.',
+          'Die App verbindet sich direkt mit deiner KitchenOwl-Instanz. Der Token wird nicht an den Korbuino-Server übertragen.',
         ),
         const SizedBox(height: 12),
         TextField(
@@ -329,7 +329,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 8),
           const Text(
             'Neue Versionen kommen als signierte APK aus den GitHub-Releases '
-            'von Korbunio und werden vor der Installation gegen die dort '
+            'von Korbuino und werden vor der Installation gegen die dort '
             'hinterlegte Prüfsumme geprüft. Die App sucht nur auf Wunsch.',
           ),
           const SizedBox(height: 8),

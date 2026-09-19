@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:korbunio_app/api/client.dart';
 
-/// Drives a real Korbunio server, mirroring the opt-in live tests the Python
+/// Drives a real Korbuino server, mirroring the opt-in live tests the Python
 /// project uses. Runs only when a server address is supplied:
 ///
 /// ```bash

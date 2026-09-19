@@ -105,4 +105,4 @@ class SearchJobRequest(BaseModel):
 
 
 class AccessTokenRequest(BaseModel):
-    label: str = Field(default="Korbunio Android", min_length=1, max_length=80)
+    label: str = Field(default="Korbuino Android", min_length=1, max_length=80)

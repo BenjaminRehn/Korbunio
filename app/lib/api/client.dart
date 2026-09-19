@@ -38,21 +38,21 @@ class ResultHandle {
   final String token;
 }
 
-/// Talks to a Korbunio server.
+/// Talks to a Korbuino server.
 ///
 /// The app uses the authenticated API equivalents of the browser endpoints:
 /// the comparison engine, normalisation and loyalty logic stay on the server,
 /// exactly as the project intends. No price is computed here.
 /// What a connection check found.
 enum ServerCheck {
-  /// A Korbunio server that accepts this client.
+  /// A Korbuino server that accepts this client.
   ok,
 
-  /// A Korbunio server that requires an API key the client did not supply,
+  /// A Korbuino server that requires an API key the client did not supply,
   /// or supplied wrongly.
   needsApiKey,
 
-  /// Nothing that identifies itself as Korbunio.
+  /// Nothing that identifies itself as Korbuino.
   notKorbunio,
 }
 
@@ -163,7 +163,7 @@ class KorbunioClient {
     }
   }
 
-  /// Confirms the base URL points at a Korbunio instance this client may use.
+  /// Confirms the base URL points at a Korbuino instance this client may use.
   ///
   /// ``/health`` stays reachable without authorisation but withholds its
   /// detail fields, which makes it a cheap and side-effect-free way to tell
@@ -203,7 +203,7 @@ class KorbunioClient {
   /// Exchanges the server's administrator key for a separate app token.
   /// The administrator key is only sent in this request and can then be
   /// replaced in encrypted storage by the returned client token.
-  Future<String> createAppToken({String label = 'Korbunio Android'}) =>
+  Future<String> createAppToken({String label = 'Korbuino Android'}) =>
       _guard(() async {
         final securityError = connectionSecurityError(baseUrl, apiKey);
         if (securityError != null) throw KorbunioException(securityError);
@@ -375,7 +375,7 @@ class KorbunioClient {
   ///
   /// Older servers without the integration answer 404; that is reported as
   /// "not configured" rather than as an error, so the app stays usable
-  /// against any Korbunio instance.
+  /// against any Korbuino instance.
   Future<ShoppingListInfo> shoppingListTargets(
     ResultHandle handle,
   ) => _guard(() async {

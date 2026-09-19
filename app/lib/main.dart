@@ -46,7 +46,7 @@ class _KorbunioAppState extends State<KorbunioApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Korbunio',
+      title: 'Korbuino',
       debugShowCheckedModeBanner: false,
       theme: korbLightTheme(),
       darkTheme: korbDarkTheme(),
@@ -78,7 +78,7 @@ class KorbunioWordmark extends StatelessWidget {
             style: TextStyle(color: colors.text),
           ),
           TextSpan(
-            text: 'Klar',
+            text: 'uino',
             style: TextStyle(color: colors.accent),
           ),
         ],

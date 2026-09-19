@@ -115,7 +115,7 @@ def test_runtime_version_matches_package_metadata():
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert metadata["project"]["version"] == __version__
     assert USER_AGENT == f"korbunio/{__version__}"
-    assert __version__ == "0.1.35"
+    assert __version__ == "0.1.37"
 
 
 def test_default_host_port_is_configurable_without_changing_container_port():
@@ -206,7 +206,7 @@ def test_public_branding_is_korbunio():
     ]
     text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in public_files)
     assert "Supermarkt-Preisvergleich" not in text
-    assert "Korbunio" in text
+    assert "Korbuino" in text
     assert "supermarkt-preisvergleich/<Version>" not in text
 
 

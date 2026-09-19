@@ -1,4 +1,4 @@
-"""Direkter Produktbild-Service für Korbunio."""
+"""Direkter Produktbild-Service für Korbuino."""
 from __future__ import annotations
 
 import hashlib

@@ -31,7 +31,7 @@ class SearchJobStore:
         with self._lock:
             self._purge(now)
             self._jobs[job_id] = {"job_id": job_id, "status": "waiting", "postal_code": postal_code, "aldi_region": aldi_region,
-                "source": "Korbunio", "retailer": "Alle Händler", "category": "Alle Kategorien",
+                "source": "Korbuino", "retailer": "Alle Händler", "category": "Alle Kategorien",
                 "step": "Suche wird vorbereitet", "progress": 0, "processed_sources": 0,
                 "total_sources": 0, "processed_products": 0, "created_at": now, "updated_at": now}
         try:

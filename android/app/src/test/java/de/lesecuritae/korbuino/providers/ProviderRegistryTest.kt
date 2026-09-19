@@ -9,7 +9,7 @@ class ProviderRegistryTest {
     @Test fun `default registry restores Aldi Nord and excludes Combi`() {
         val ids = ProviderRegistry.default(OkHttpClient()).all().map { it.id }.toSet()
         assertTrue("ALDI Nord must remain selectable", "aldi-nord" in ids)
-        assertFalse("Combi is not a Korbunio retailer", "marktguru-combi" in ids)
+        assertFalse("Combi is not a Korbuino retailer", "marktguru-combi" in ids)
         assertTrue("EDEKA must be selectable", "edeka" in ids)
         assertTrue("trinkgut must be selectable", "trinkgut" in ids)
     }

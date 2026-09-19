@@ -129,7 +129,7 @@ jobs:
           common_headers = {
               "Accept": "application/vnd.github+json",
               "Authorization": f"Bearer {token}",
-              "User-Agent": "Korbunio-Android-Release",
+              "User-Agent": "Korbuino-Android-Release",
               "X-GitHub-Api-Version": "2022-11-28",
           }
 
@@ -175,7 +175,7 @@ jobs:
               payload={
                   "tag_name": tag,
                   "target_commitish": os.environ["GITHUB_SHA"],
-                  "name": f"Korbunio {tag}",
+                  "name": f"Korbuino {tag}",
                   "body": release_notes,
                   "draft": True,
                   "prerelease": False,
@@ -240,21 +240,21 @@ jobs:
             fi
           }
 
-          close_issue 8 "Mit Korbunio v0.1.35 wurden die nativen Händlerabrufe, die REWE-PLZ- und Wochenlogik, die Angebotsvalidierung sowie die Produktbildkette überarbeitet und im Android-Emulator geprüft. Weitere Händlerwünsche können als eigene, klar abgegrenzte Anfrage erfasst werden."
-          close_issue 15 "Korbunio v0.1.35 nutzt strukturierte öffentliche bzw. offizielle Datenquellen, wo diese technisch verlässlich verfügbar sind, und hält die native App dabei serverlos. Anbieterabhängige Einschränkungen werden getrennt ausgewiesen statt mit erfundenen Daten überdeckt."
-          close_issue 39 "Die Docker-Startseite zeigt ab Korbunio v0.1.35 die laufende Versionsnummer sichtbar im Seitenfuß an."
-          close_issue 40 "Das mobile Angebotslayout und das Scrollverhalten wurden in Korbunio v0.1.35 korrigiert und auf Smartphone-Auflösungen sowie im Android-Emulator geprüft."
+          close_issue 8 "Mit Korbuino v0.1.35 wurden die nativen Händlerabrufe, die REWE-PLZ- und Wochenlogik, die Angebotsvalidierung sowie die Produktbildkette überarbeitet und im Android-Emulator geprüft. Weitere Händlerwünsche können als eigene, klar abgegrenzte Anfrage erfasst werden."
+          close_issue 15 "Korbuino v0.1.35 nutzt strukturierte öffentliche bzw. offizielle Datenquellen, wo diese technisch verlässlich verfügbar sind, und hält die native App dabei serverlos. Anbieterabhängige Einschränkungen werden getrennt ausgewiesen statt mit erfundenen Daten überdeckt."
+          close_issue 39 "Die Docker-Startseite zeigt ab Korbuino v0.1.35 die laufende Versionsnummer sichtbar im Seitenfuß an."
+          close_issue 40 "Das mobile Angebotslayout und das Scrollverhalten wurden in Korbuino v0.1.35 korrigiert und auf Smartphone-Auflösungen sowie im Android-Emulator geprüft."
 
       - name: Explain how to install it
         run: |
           {
-            echo "### Korbunio app"
+            echo "### Korbuino app"
             echo
             echo "Download the **korbunio-apk** artifact from this run and install"
             echo "\`app-release.apk\` on the phone. This is the native serverless app."
             echo
-            echo "The APK is signed with Korbunio's persistent release key and can"
-            echo "be updated by future Korbunio releases without losing app data."
+            echo "The APK is signed with Korbuino's persistent release key and can"
+            echo "be updated by future Korbuino releases without losing app data."
           } >> "$GITHUB_STEP_SUMMARY"
 
   flutter-compatibility:

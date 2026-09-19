@@ -1,3 +1,30 @@
+# 0.1.37
+
+## Einkaufsliste mit Angebotssuche, Serveranbindung und einheitlicher Name
+
+- Die Einkaufsliste der nativen App lässt Artikel wieder löschen (mit
+  „Rückgängig“) und zeigt an, bei welchem Händler ein Artikel eingetragen wurde.
+  „Im Angebot?“ sucht einen Artikel in den geladenen Angeboten und listet
+  Händler und Preis, günstigste zuerst.
+- Mit gesetzter Server-Adresse fragt die native App bei einem Händler, der
+  die App blockiert (HTTP 403/429), den eigenen Korbuino-Server für genau diesen
+  Händler. Der Server ruft mit curl_cffi ab. Hilft er nicht, bleibt die
+  Händler-Bestätigung im Browser erhalten. Der reine Servermodus ist unverändert.
+- Angebote vom Server erscheinen mit Produktbildern. Dafür kann
+  `/api/v1/compare` optional `include_image_urls` liefern (standardmäßig aus).
+- Händler ohne Angebote für die geladene Postleitzahl verschwinden aus der
+  Händlerauswahl der nativen App. HOL'AB! wird nur noch abgerufen, wenn es in der
+  Postleitzahl einen Markt gibt, wie auf dem Server. Eine leere Antwort wird
+  nicht mehr als Offline-Fehler gemeldet.
+- EDEKA (mit Bestätigung im Browser, ohne Google-Dienste) und trinkgut sind in
+  der nativen App verfügbar; die Flutter-App bietet trinkgut ebenfalls an.
+- Systemleisten: Inhalt und Schaltflächen überlappen Status- und Navigationsleiste
+  nicht mehr (Android 15 zeichnet randlos).
+- „Netto mit Hund“ heißt überall „Netto schwarz“.
+- Der Projektname wird in Oberflächen und Dokumentation als „Korbuino“ geschrieben.
+  Paket-ID, Repository, Container-Image und `korbunio-<Version>.apk` bleiben
+  unverändert, damit Updates und Obtainium-Einträge weiter funktionieren.
+
 # 0.1.36
 
 ## Sonntagswechsel und regionale Angebotsbilder

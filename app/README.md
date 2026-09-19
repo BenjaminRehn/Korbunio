@@ -1,7 +1,7 @@
-# Korbunio Flutter compatibility app
+# Korbuino Flutter compatibility app
 
 Offline-first Flutter client for Android, styled after the web interface and
-optionally connected to any self-hosted [Korbunio](../README.md) server.
+optionally connected to any self-hosted [Korbuino](../README.md) server.
 
 The native Kotlin/Jetpack Compose client is under [`../android/`](../android/).
 This Flutter client remains available during the provider migration.
@@ -25,13 +25,13 @@ price; it renders the values the comparison engine returns.
 - endless scrolling
 - local result cache: previously loaded offers remain searchable without a server
 - persistent local shopping list with offline view and clipboard export
-- direct optional KitchenOwl connection, independent of the Korbunio server
+- direct optional KitchenOwl connection, independent of the Korbuino server
 - opens straight into the last comparison and re-queries the retailers only
   after an offer change (Thursday, and Sunday for the new week), see below
 - a refresh action that starts a new search by hand
 
 Server address, postal code, loyalty selection and target list are remembered
-on the device. Korbunio and KitchenOwl tokens are stored in Android's encrypted
+on the device. Korbuino and KitchenOwl tokens are stored in Android's encrypted
 Keystore rather than normal preferences.
 
 On first connection, an app without its own saved postal code or retailer
@@ -92,7 +92,7 @@ under a category named after the shop with a colour dot, "🔴 REWE", so the
 list sorts by store; missing categories are created.
 
 The long-lived token stays on the device and is sent only to the configured
-HTTPS KitchenOwl host. It is never forwarded to the Korbunio server. If the
+HTTPS KitchenOwl host. It is never forwarded to the Korbuino server. If the
 server provides its own compatible KitchenOwl endpoint, the client can still
 use that as a fallback.
 
@@ -161,7 +161,7 @@ Building locally works too, when the machine's Gradle toolchain is healthy:
 flutter build apk --release
 ```
 
-Official release artifacts are signed with Korbunio's persistent release key.
+Official release artifacts are signed with Korbuino's persistent release key.
 CI receives the key exclusively through encrypted repository secrets; no key or
 password is stored in Git. Local release builds must provide the corresponding
 signing environment variables and keystore. Unsigned or debug-signed release
@@ -171,7 +171,7 @@ builds fail instead of silently producing a differently signed APK.
 
 Some self-hosted instances run plain HTTP on a LAN or VPN, so Android permits a
 tokenless connection to them. Application-level validation refuses to transmit
-either a Korbunio or KitchenOwl token over cleartext HTTP. Certificate
+either a Korbuino or KitchenOwl token over cleartext HTTP. Certificate
 validation for HTTPS remains fully enabled.
 
 ## Tests

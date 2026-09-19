@@ -1,36 +1,36 @@
-# Korbunio
+# Korbuino
 
 ## Android-App
 
-Unter [`app/`](app/) liegt ein Offline-first-Flutter-Client. In den Einstellungen kann eine eigene Korbunio-Docker-Instanz verbunden werden; API-Tokens liegen im Android Keystore und werden nur über HTTPS übertragen. Bereits geladene Angebote bleiben ohne Server verfügbar. Unter Android holt ein Button in den Einstellungen die aktuelle Release-APK aus den GitHub-Releases dieses Repositories und prüft sie vor der Installation gegen die von GitHub veröffentlichte Prüfsumme. Eine eigene KitchenOwl-Instanz kann direkt per HTTPS angebunden werden, ohne den Token an Korbunio weiterzugeben. Details und APK-Bauanleitung stehen in [`app/README.md`](app/README.md).
+Unter [`app/`](app/) liegt ein Offline-first-Flutter-Client. In den Einstellungen kann eine eigene Korbuino-Docker-Instanz verbunden werden; API-Tokens liegen im Android Keystore und werden nur über HTTPS übertragen. Bereits geladene Angebote bleiben ohne Server verfügbar. Unter Android holt ein Button in den Einstellungen die aktuelle Release-APK aus den GitHub-Releases dieses Repositories und prüft sie vor der Installation gegen die von GitHub veröffentlichte Prüfsumme. Eine eigene KitchenOwl-Instanz kann direkt per HTTPS angebunden werden, ohne den Token an Korbuino weiterzugeben. Details und APK-Bauanleitung stehen in [`app/README.md`](app/README.md).
 
 [← Sprachauswahl](README.md) · [English](README.en.md)
 
-![Korbunio](docs/readme-header.svg)
+![Korbuino](docs/readme-header.svg)
 
 ## Native Android-App
 
 Der Kotlin-/Jetpack-Compose-Client unter [`android/`](android/) wird zu einer
 serverlosen, offlinefähigen App ausgebaut. Er speichert normalisierte Daten in
 Room, verwendet WorkManager für optionale Hintergrundaufgaben, hält Zugangsdaten
-im Android-Keystore und ruft Händlerquellen direkt ohne Korbunio-Server ab.
+im Android-Keystore und ruft Händlerquellen direkt ohne Korbuino-Server ab.
 Das native Register deckt derzeit REWE, GLOBUS, ALDI Nord, ALDI Süd,
 Kaufland, Rossmann, Müller, HOL'AB!, beide Netto-Varianten und dm sowie
 regionale Marktguru-Quellen für famila Nordwest, Lidl und PENNY ab. Der bestehende Flutter-Client unter
 [`app/`](app/) bleibt während der Migration als kompatible Version erhalten,
 während weitere Händlerintegrationen umgestellt werden.
 
-Korbunio ist ein selbst gehosteter Vergleich für aktuelle regionale Supermarktangebote in Deutschland. Die Anwendung braucht im normalen Betrieb nur eine deutsche Postleitzahl. Sie ermittelt passende Händler und Märkte, lädt die verfügbaren Wochenangebote, normalisiert Produktnamen, Packungsgrößen und Grundpreise und stellt gleiche oder vergleichbare Angebote gegenüber.
+Korbuino ist ein selbst gehosteter Vergleich für aktuelle regionale Supermarktangebote in Deutschland. Die Anwendung braucht im normalen Betrieb nur eine deutsche Postleitzahl. Sie ermittelt passende Händler und Märkte, lädt die verfügbaren Wochenangebote, normalisiert Produktnamen, Packungsgrößen und Grundpreise und stellt gleiche oder vergleichbare Angebote gegenüber.
 
-Dabei geht es nicht nur darum, irgendeinen Preis aus einem Prospekt anzuzeigen. Korbunio versucht die Daten so aufzubereiten, dass beispielsweise unterschiedliche Packungsgrößen, Grundpreise, Bonuspreise und regionale Händlerbestände tatsächlich miteinander vergleichbar werden.
+Dabei geht es nicht nur darum, irgendeinen Preis aus einem Prospekt anzuzeigen. Korbuino versucht die Daten so aufzubereiten, dass beispielsweise unterschiedliche Packungsgrößen, Grundpreise, Bonuspreise und regionale Händlerbestände tatsächlich miteinander vergleichbar werden.
 
-## Warum Korbunio entstanden ist
+## Warum Korbuino entstanden ist
 
-Korbunio ist durch Vibe Coding aus einem sehr konkreten eigenen Anwendungsfall entstanden. Die ursprüngliche Idee war deutlich kleiner: Eine lokale LLM sollte den Preisvergleich automatisch anstoßen und das Ergebnis montags morgens über Conduit ausgeben, damit die neuen Wochenangebote direkt vorliegen.
+Korbuino ist durch Vibe Coding aus einem sehr konkreten eigenen Anwendungsfall entstanden. Die ursprüngliche Idee war deutlich kleiner: Eine lokale LLM sollte den Preisvergleich automatisch anstoßen und das Ergebnis montags morgens über Conduit ausgeben, damit die neuen Wochenangebote direkt vorliegen.
 
-Während der Entwicklung wurde schnell klar, dass die eigentliche Vergleichslogik besser als eigenständiger Dienst funktioniert. Ohne vorgeschaltete LLM reagiert Korbunio schneller, lässt sich leichter automatisieren und kann gleichzeitig von Browsern, Skripten, REST-Clients oder später wieder von einer LLM genutzt werden. Für meinen Anwendungsfall ist diese Trennung flexibler als die ursprüngliche reine LLM-Lösung.
+Während der Entwicklung wurde schnell klar, dass die eigentliche Vergleichslogik besser als eigenständiger Dienst funktioniert. Ohne vorgeschaltete LLM reagiert Korbuino schneller, lässt sich leichter automatisieren und kann gleichzeitig von Browsern, Skripten, REST-Clients oder später wieder von einer LLM genutzt werden. Für meinen Anwendungsfall ist diese Trennung flexibler als die ursprüngliche reine LLM-Lösung.
 
-Eine LLM ist deshalb heute **keine Voraussetzung**. Wer möchte, kann Korbunio weiterhin in einen Agenten-, Conduit- oder OpenAPI-Workflow einbauen. Der Preisvergleich selbst bleibt davon unabhängig.
+Eine LLM ist deshalb heute **keine Voraussetzung**. Wer möchte, kann Korbuino weiterhin in einen Agenten-, Conduit- oder OpenAPI-Workflow einbauen. Der Preisvergleich selbst bleibt davon unabhängig.
 
 ## Schnellstart
 
@@ -149,7 +149,7 @@ Bei trinkgut wird die Filiale der Postleitzahl oder sonst die nächstgelegene ve
 
 Bei mehreren exakten Filialtreffern innerhalb einer Postleitzahl können REWE- und Netto-Marken-Discount-Filialen gezielt ausgewählt werden. REWE-Angebote werden filialbezogen geladen. Bei Netto Marken-Discount bleibt der derzeitige Angebotskatalog regional; die gewählte offizielle Filiale wird deshalb transparent angezeigt, ohne filialgenaue Preise zu versprechen.
 
-famila Nordwest ist nur im Nordwesten vertreten und deshalb optional wie Marktkauf und GLOBUS: Liefert die Quelle nichts, wird das nicht als Verbindungsfehler gemeldet. Korbunio zeigt nur den tatsächlich verfügbaren regionalen Bestand und setzt keine Daten aus einem anderen Gebiet ein.
+famila Nordwest ist nur im Nordwesten vertreten und deshalb optional wie Marktkauf und GLOBUS: Liefert die Quelle nichts, wird das nicht als Verbindungsfehler gemeldet. Korbuino zeigt nur den tatsächlich verfügbaren regionalen Bestand und setzt keine Daten aus einem anderen Gebiet ein.
 
 famila Nordwest und famila Nordost sind getrennte, voneinander unabhängige Handelsgruppen. Erkannt wird nur famila Nordwest; famila Nordost ist ausdrücklich ausgeschlossen und kann nie unter der Bünting-Marke erscheinen.
 
@@ -203,7 +203,7 @@ Der normale Datenweg ist bewusst einfach:
 ```text
 Browser oder REST-Client
         ↓
-      Korbunio
+      Korbuino
         ↓
   Händlerquellen
 ```
@@ -276,7 +276,7 @@ Der Bildproxy validiert externe Bildziele, blockiert private und Loopback-Adress
 
 ## Signierte Ergebnis- und Bildlinks
 
-Korbunio erzeugt beim ersten Start selbstständig einen zufälligen HMAC-Schlüssel und speichert ihn im persistenten Daten-Volume. Der Nutzer muss diesen Schlüssel im Standardbetrieb nicht selbst anlegen. Ergebnis- und Bildlinks können dadurch signiert werden und bleiben über normale Container-Neustarts hinweg gültig, solange das Volume erhalten bleibt.
+Korbuino erzeugt beim ersten Start selbstständig einen zufälligen HMAC-Schlüssel und speichert ihn im persistenten Daten-Volume. Der Nutzer muss diesen Schlüssel im Standardbetrieb nicht selbst anlegen. Ergebnis- und Bildlinks können dadurch signiert werden und bleiben über normale Container-Neustarts hinweg gültig, solange das Volume erhalten bleibt.
 
 ## Konfiguration
 
@@ -286,7 +286,7 @@ Die zuletzt verwendete PLZ und Händlerauswahl speichert die Weboberfläche loka
 
 ## Python ohne Docker
 
-Docker ist der empfohlene Weg. Für Entwicklung oder eine manuelle Installation kann Korbunio auch direkt mit Python **3.12 oder neuer** betrieben werden:
+Docker ist der empfohlene Weg. Für Entwicklung oder eine manuelle Installation kann Korbuino auch direkt mit Python **3.12 oder neuer** betrieben werden:
 
 ```bash
 python -m venv .venv
@@ -299,15 +299,15 @@ uvicorn supermarkt.asgi:app --host 0.0.0.0 --port 8000
 
 Für den Alltagsbetrieb auf einem Windows-PC liegt ein fertiger Weg ohne Docker bei. Voraussetzung ist Python 3.12 oder neuer, zu bekommen über `winget install Python.Python.3.13` oder von [python.org](https://www.python.org/downloads/windows/) - im Setup den Haken bei "Add python.exe to PATH" setzen.
 
-1. Dieses Verzeichnis an einen dauerhaften Ort legen, zum Beispiel `C:\Korbunio`.
-2. `windows\install.cmd` per Doppelklick starten. Das legt die virtuelle Umgebung an, installiert alles Nötige und erzeugt eine Verknüpfung **Korbunio** auf dem Desktop.
-3. Ab jetzt genügt ein Doppelklick auf das Desktop-Symbol. Korbunio startet und der Browser öffnet sich nach wenigen Sekunden auf <http://127.0.0.1:8000/>.
+1. Dieses Verzeichnis an einen dauerhaften Ort legen, zum Beispiel `C:\Korbuino`.
+2. `windows\install.cmd` per Doppelklick starten. Das legt die virtuelle Umgebung an, installiert alles Nötige und erzeugt eine Verknüpfung **Korbuino** auf dem Desktop.
+3. Ab jetzt genügt ein Doppelklick auf das Desktop-Symbol. Korbuino startet und der Browser öffnet sich nach wenigen Sekunden auf <http://127.0.0.1:8000/>.
 
-Das schwarze Fenster gehört dazu und zeigt an, dass Korbunio läuft. Es zu schließen beendet das Programm. Ein anderer Port lässt sich über die Umgebungsvariable `SUPERMARKT_PORT` vorgeben.
+Das schwarze Fenster gehört dazu und zeigt an, dass Korbuino läuft. Es zu schließen beendet das Programm. Ein anderer Port lässt sich über die Umgebungsvariable `SUPERMARKT_PORT` vorgeben.
 
-Die Angebote von ALDI Süd, Kaufland und REWE werden über einen Browser im Hintergrund geladen. Korbunio sucht dafür selbstständig nach Chromium, Google Chrome oder dem auf Windows vorinstallierten Microsoft Edge. Nur wenn keiner davon gefunden wird, muss `SUPERMARKT_CHROMIUM` auf die passende `.exe` zeigen. Alle übrigen Händler brauchen keinen Browser.
+Die Angebote von ALDI Süd, Kaufland und REWE werden über einen Browser im Hintergrund geladen. Korbuino sucht dafür selbstständig nach Chromium, Google Chrome oder dem auf Windows vorinstallierten Microsoft Edge. Nur wenn keiner davon gefunden wird, muss `SUPERMARKT_CHROMIUM` auf die passende `.exe` zeigen. Alle übrigen Händler brauchen keinen Browser.
 
-Korbunio hört bewusst nur auf `127.0.0.1` und ist damit ausschließlich auf diesem PC erreichbar. Wer die Oberfläche auch am Handy im eigenen WLAN nutzen möchte, startet stattdessen mit `--host 0.0.0.0` und öffnet den Port in der Windows-Firewall. Da die Oberfläche keine eigene Anmeldung hat, ist das nur im vertrauenswürdigen Heimnetz sinnvoll.
+Korbuino hört bewusst nur auf `127.0.0.1` und ist damit ausschließlich auf diesem PC erreichbar. Wer die Oberfläche auch am Handy im eigenen WLAN nutzen möchte, startet stattdessen mit `--host 0.0.0.0` und öffnet den Port in der Windows-Firewall. Da die Oberfläche keine eigene Anmeldung hat, ist das nur im vertrauenswürdigen Heimnetz sinnvoll.
 
 Nach einem Update des Verzeichnisses `windows\install.cmd` erneut starten.
 
@@ -356,15 +356,15 @@ Die Händleradapter kennen die jeweiligen Datenquellen. Die Oberfläche berechne
 
 ## Grenzen
 
-Händlerseiten und nicht dokumentierte Webschnittstellen können sich ändern. Ein einzelner Adapter kann deshalb zeitweise ausfallen, obwohl Korbunio selbst läuft. Wo ein geeigneter regionaler Ersatzdatenweg vorhanden ist, kann dieser händlerspezifisch einspringen. Ansonsten bleibt der Vergleich mit den übrigen erreichbaren Quellen nutzbar.
+Händlerseiten und nicht dokumentierte Webschnittstellen können sich ändern. Ein einzelner Adapter kann deshalb zeitweise ausfallen, obwohl Korbuino selbst läuft. Wo ein geeigneter regionaler Ersatzdatenweg vorhanden ist, kann dieser händlerspezifisch einspringen. Ansonsten bleibt der Vergleich mit den übrigen erreichbaren Quellen nutzbar.
 
-Korbunio erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvorteile. Die Ergebnisse sind nur so vollständig und aktuell wie die erreichbaren Quelldaten.
+Korbuino erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvorteile. Die Ergebnisse sind nur so vollständig und aktuell wie die erreichbaren Quelldaten.
 
 ## Einkaufsliste und Export
 
-Der Bereich **Einkauf** speichert die persönliche Liste ausschließlich im IndexedDB-Speicher des jeweiligen Browserprofils. Es gibt keine Konten, serverseitigen persönlichen Listen, Tracker oder automatische Gerätesynchronisation. Angebote und manuelle Artikel lassen sich hinzufügen, bearbeiten, abhaken und nach Händler gruppieren. Warenwert und Pfand werden getrennt berechnet; fehlen Preise, zeigt Korbunio nur die bekannte Gesamtsumme.
+Der Bereich **Einkauf** speichert die persönliche Liste ausschließlich im IndexedDB-Speicher des jeweiligen Browserprofils. Es gibt keine Konten, serverseitigen persönlichen Listen, Tracker oder automatische Gerätesynchronisation. Angebote und manuelle Artikel lassen sich hinzufügen, bearbeiten, abhaken und nach Händler gruppieren. Warenwert und Pfand werden getrennt berechnet; fehlen Preise, zeigt Korbuino nur die bekannte Gesamtsumme.
 
-Für die allgemeine Geräteübergabe stehen Textkopie, Web Share, TXT sowie ein versioniertes JSON-Backup mit lokaler Importvorschau bereit. Korbunio enthält keine app-spezifische Bring- oder KitchenOwl-Verbindung.
+Für die allgemeine Geräteübergabe stehen Textkopie, Web Share, TXT sowie ein versioniertes JSON-Backup mit lokaler Importvorschau bereit. Korbuino enthält keine app-spezifische Bring- oder KitchenOwl-Verbindung.
 
 ## Roadmap
 
@@ -372,7 +372,7 @@ Für spätere Versionen sind zusätzliche REST-/OpenAPI-Anbindungen für lokale 
 
 ## Projekt freiwillig unterstützen
 
-Korbunio bleibt kostenlos, werbefrei und ohne Nutzertracking. Alle Funktionen stehen unabhängig davon zur Verfügung, ob jemand spendet. Es gibt keine Bezahlschranke und keine Einschränkungen für Nutzer ohne Spende.
+Korbuino bleibt kostenlos, werbefrei und ohne Nutzertracking. Alle Funktionen stehen unabhängig davon zur Verfügung, ob jemand spendet. Es gibt keine Bezahlschranke und keine Einschränkungen für Nutzer ohne Spende.
 
 Wer die laufende Entwicklung, neue Händleradapter und die Pflege der Datenquellen freiwillig unterstützen möchte, kann Monero an folgende öffentliche Projektadresse senden:
 
@@ -380,7 +380,7 @@ Wer die laufende Entwicklung, neue Händleradapter und die Pflege der Datenquell
 83WjjKs4ijKChStc9GPrpZYa9DXYpHmbSeVipJrQSzMnRdmYtFE4K5D7ff7BsrTDa8TTZvJmAWivgWLEcJpULQ79KpRX8ik
 ```
 
-Eine Spende ist vollständig freiwillig und hat keinen Einfluss auf Funktionsumfang, Priorisierung einzelner Nutzer oder Zugang zu Korbunio.
+Eine Spende ist vollständig freiwillig und hat keinen Einfluss auf Funktionsumfang, Priorisierung einzelner Nutzer oder Zugang zu Korbuino.
 
 ## Lizenz und Marken
 
@@ -388,4 +388,4 @@ Der Quellcode steht unter der [BSD-3-Clause-Lizenz](LICENSE).
 
 Copyright © 2026 lesecuritae für Tarnkappe.info.
 
-Korbunio ist unabhängig und steht in keiner Verbindung zu den genannten Händlern oder Bonusprogrammen. Marken-, Händler- und Produktnamen gehören den jeweiligen Rechteinhabern.
+Korbuino ist unabhängig und steht in keiner Verbindung zu den genannten Händlern oder Bonusprogrammen. Marken-, Händler- und Produktnamen gehören den jeweiligen Rechteinhabern.

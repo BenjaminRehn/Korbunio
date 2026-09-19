@@ -6,6 +6,6 @@ from .version import __version__
 from .web import router
 
 
-app = FastAPI(title="Korbunio", version=__version__)
+app = FastAPI(title="Korbuino", version=__version__)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(router)

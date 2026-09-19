@@ -1,34 +1,34 @@
-# Korbunio
+# Korbuino
 
 ## Android app
 
-[`app/`](app/) contains an offline-first Flutter client. Users can connect their own Korbunio Docker instance in Settings; API tokens are kept in the Android Keystore and transmitted over HTTPS only. Previously loaded offers remain available without a server. On Android a button in the settings fetches the latest release APK from this repository's GitHub releases, verified against the digest GitHub publishes before installing it. A user-owned KitchenOwl instance can be connected directly over HTTPS without forwarding its token to Korbunio. See [`app/README.md`](app/README.md) for details and APK build instructions.
+[`app/`](app/) contains an offline-first Flutter client. Users can connect their own Korbuino Docker instance in Settings; API tokens are kept in the Android Keystore and transmitted over HTTPS only. Previously loaded offers remain available without a server. On Android a button in the settings fetches the latest release APK from this repository's GitHub releases, verified against the digest GitHub publishes before installing it. A user-owned KitchenOwl instance can be connected directly over HTTPS without forwarding its token to Korbuino. See [`app/README.md`](app/README.md) for details and APK build instructions.
 
 [← Language selection](README.md) · [Deutsch](README.de.md)
 
-![Korbunio](docs/readme-header.svg)
+![Korbuino](docs/readme-header.svg)
 
 ## Native Android app
 
 The Kotlin/Jetpack Compose client in [`android/`](android/) is being migrated
 to a serverless, offline-first architecture. It stores normalized data in Room,
 uses WorkManager for opt-in background work, keeps credentials in the Android
-Keystore, and fetches retailer sources directly without a Korbunio server.
+Keystore, and fetches retailer sources directly without a Korbuino server.
 The native registry currently covers REWE, GLOBUS, ALDI Nord, ALDI Süd,
 Kaufland, Rossmann, Müller, HOL'AB!, both Netto variants and dm, plus
 regional Marktguru sources for famila Nordwest, Lidl and PENNY. The existing Flutter client in
 [`app/`](app/) remains the compatibility client while further provider flows
 are migrated.
 
-Korbunio is a self-hosted service for comparing current regional supermarket offers in Germany. In normal use, the user only enters a German postal code. Korbunio discovers matching retailers and stores, retrieves current weekly offers, normalizes product names and package sizes, keeps package size separate from unit-price reference quantities, and compares identical or meaningfully comparable products. Loyalty programs can be included optionally, and results are presented in an interactive web interface.
+Korbuino is a self-hosted service for comparing current regional supermarket offers in Germany. In normal use, the user only enters a German postal code. Korbuino discovers matching retailers and stores, retrieves current weekly offers, normalizes product names and package sizes, keeps package size separate from unit-price reference quantities, and compares identical or meaningfully comparable products. Loyalty programs can be included optionally, and results are presented in an interactive web interface.
 
 It does more than list leaflet prices: the comparison engine cleans inconsistent source data and presents price, actual package size, and unit price separately so differences between retailers and package formats remain understandable.
 
 ## How the project started
 
-Korbunio grew out of vibe coding for a specific personal use case. The original idea was to have a local LLM run the supermarket comparison automatically and provide or post the result through Conduit on Monday mornings, once the new weekly offers were available.
+Korbuino grew out of vibe coding for a specific personal use case. The original idea was to have a local LLM run the supermarket comparison automatically and provide or post the result through Conduit on Monday mornings, once the new weekly offers were available.
 
-During development, it became clear that the comparison logic made more sense as a standalone service. In my view, that made Korbunio faster, more flexible, easier to automate, and independent of any particular LLM model or frontend. Browsers, REST clients, scripts, Conduit, and LLMs can all use the same service.
+During development, it became clear that the comparison logic made more sense as a standalone service. In my view, that made Korbuino faster, more flexible, easier to automate, and independent of any particular LLM model or frontend. Browsers, REST clients, scripts, Conduit, and LLMs can all use the same service.
 
 An LLM is therefore optional and is not a runtime requirement. The original idea of an automatically generated Monday report using a local LLM and Conduit remains a possible use case.
 
@@ -110,17 +110,17 @@ The browser interface and REST API use the same comparison engine. Retailer adap
 
 ## Supported retailers and data paths
 
-Korbunio currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, Netto schwarz, GLOBUS, HOL’AB!, Rossmann, Müller, famila Nordwest and trinkgut.
+Korbuino currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, Netto schwarz, GLOBUS, HOL’AB!, Rossmann, Müller, famila Nordwest and trinkgut.
 
 REWE, EDEKA, Marktkauf, Kaufland, GLOBUS, and the applicable ALDI region are loaded preferentially from direct retailer sources. ALDI Süd uses its structured official weekly publication as its complete primary source. ALDI Nord takes price, unit price, explicitly published deposit, and product image from its official offer data. If the ALDI region cannot be determined unambiguously and no explicit selection was made, ALDI is omitted and a warning is shown.
 
 For trinkgut, the store list is downloaded from the official trinkgut website (or taken from cached data) and the store with the postal code, or else the nearest one, is used. A store further away than `SUPERMARKT_TRINKGUT_MAX_DISTANCE_KM` (default 40 km) is not presented as local: the official source reports that there is none nearby and the regional Marktguru data is used instead. Where the listing cuts the deposit off, the product page is read for it (at most `SUPERMARKT_TRINKGUT_DEPOSIT_FETCH_WORKERS` at a time) and the value is remembered.
 
-Lidl, PENNY, Netto Marken-Discount, and famila Nordwest are loaded from regional Marktguru data. Netto schwarz, Rossmann, Müller, and HOL’AB! use separate source-specific data paths. Korbunio combines a broad regional search with supplementary retailer-name searches where applicable; the name queries alone are never treated as a complete catalogue.
+Lidl, PENNY, Netto Marken-Discount, and famila Nordwest are loaded from regional Marktguru data. Netto schwarz, Rossmann, Müller, and HOL’AB! use separate source-specific data paths. Korbuino combines a broad regional search with supplementary retailer-name searches where applicable; the name queries alone are never treated as a complete catalogue.
 
-When a postal code has multiple exact store matches, users can select a specific REWE or Netto Marken-Discount store. REWE offers are loaded for that store. Netto Marken-Discount currently remains a regional catalogue, so Korbunio displays the selected official store transparently without claiming store-specific prices.
+When a postal code has multiple exact store matches, users can select a specific REWE or Netto Marken-Discount store. REWE offers are loaded for that store. Netto Marken-Discount currently remains a regional catalogue, so Korbuino displays the selected official store transparently without claiming store-specific prices.
 
-famila Nordwest only trades in north-western Germany and is therefore optional in the same sense as Marktkauf and GLOBUS: an empty regional result is not reported as a connection error. Korbunio shows only the regional catalogue actually available and does not substitute data from another area.
+famila Nordwest only trades in north-western Germany and is therefore optional in the same sense as Marktkauf and GLOBUS: an empty regional result is not reported as a connection error. Korbuino shows only the regional catalogue actually available and does not substitute data from another area.
 
 famila Nordwest and famila Nordost are separate, unrelated retail groups. Only famila Nordwest is matched; famila Nordost is explicitly excluded so its offers can never appear under the Bünting brand.
 
@@ -173,23 +173,23 @@ The current code recognizes:
 - mein GLOBUS
 - PAYBACK at supported retailers
 
-Multiple programs may be selected together. Korbunio only applies product prices or euro-denominated benefits explicitly present in the offer data. Direct loyalty prices may reduce the checkout price, while a specifically stated euro credit is applied as a benefit.
+Multiple programs may be selected together. Korbuino only applies product prices or euro-denominated benefits explicitly present in the offer data. Direct loyalty prices may reduce the checkout price, while a specifically stated euro credit is applied as a benefit.
 
 Points, personal coupons, status benefits, percentage promotions without a concrete resulting price, and unknown discounts are never estimated or converted into invented euro amounts.
 
 ## No mandatory LLM
 
-Korbunio is a standalone service:
+Korbuino is a standalone service:
 
 ```text
 Browser / script / REST client / LLM
                   ↓
-               Korbunio
+               Korbuino
                   ↓
             retailer sources
 ```
 
-A local LLM can still use Korbunio, for example for an automatic Monday report through Conduit, natural-language queries, or summaries. The price comparison itself requires no LLM and remains independent of any model, agent, or frontend.
+A local LLM can still use Korbuino, for example for an automatic Monday report through Conduit, natural-language queries, or summaries. The price comparison itself requires no LLM and remains independent of any model, agent, or frontend.
 
 ## REST API
 
@@ -244,7 +244,7 @@ The image cache defaults to 604,800 seconds or seven days, 512 MiB total, and 4 
 
 Product images are delivered through a local cache. The image service accepts only HTTP and HTTPS targets, resolves target hosts, and blocks private, loopback, link-local, multicast, reserved, and unspecified addresses. Redirect targets are validated again, providing SSRF protection.
 
-Common tracking pixels, logos, placeholders, loyalty badges, and unsupported image types are rejected. Downloads have timeout, file-size, and cache-size limits. Result and image links are HMAC-signed. Korbunio generates and persistently stores a random signing key on first start unless an explicit key is configured.
+Common tracking pixels, logos, placeholders, loyalty badges, and unsupported image types are rejected. Downloads have timeout, file-size, and cache-size limits. Result and image links are HMAC-signed. Korbuino generates and persistently stores a random signing key on first start unless an explicit key is configured.
 
 ## Configuration
 
@@ -288,7 +288,7 @@ The web interface stores the last postal code and retailer selection locally in 
 
 ## Running without Docker
 
-Korbunio requires Python 3.12 or newer:
+Korbuino requires Python 3.12 or newer:
 
 ```bash
 python -m venv .venv
@@ -344,15 +344,15 @@ The internal Python package name `supermarkt` remains for technical reasons. Ada
 
 ## Limitations
 
-Retailer websites and undocumented interfaces may change at any time. An individual adapter may fail temporarily without making Korbunio unusable as a whole. Where suitable regional fallback data exists, it can replace only the affected retailer; other reachable sources remain usable.
+Retailer websites and undocumented interfaces may change at any time. An individual adapter may fail temporarily without making Korbuino unusable as a whole. Where suitable regional fallback data exists, it can replace only the affected retailer; other reachable sources remain usable.
 
-Korbunio does not invent missing prices or estimate unknown loyalty benefits. Completeness and freshness depend on reachable regional source data.
+Korbuino does not invent missing prices or estimate unknown loyalty benefits. Completeness and freshness depend on reachable regional source data.
 
 ## Shopping list and export
 
-The **Einkauf** area stores the personal list exclusively in IndexedDB in the current browser profile. There are no accounts, server-side personal lists, trackers, or automatic device synchronisation. Offers and manual items can be added, edited, checked, and grouped by retailer. Goods and deposits are calculated separately; when prices are missing, Korbunio shows only the known total.
+The **Einkauf** area stores the personal list exclusively in IndexedDB in the current browser profile. There are no accounts, server-side personal lists, trackers, or automatic device synchronisation. Offers and manual items can be added, edited, checked, and grouped by retailer. Goods and deposits are calculated separately; when prices are missing, Korbuino shows only the known total.
 
-General transfer options include text copy, Web Share, TXT, and a versioned JSON backup with a local import preview. Korbunio has no app-specific Bring or KitchenOwl connection.
+General transfer options include text copy, Web Share, TXT, and a versioned JSON backup with a local import preview. Korbuino has no app-specific Bring or KitchenOwl connection.
 
 ## Roadmap
 
@@ -360,7 +360,7 @@ Future versions may add REST or OpenAPI connections for local automations. The c
 
 ## Support the project
 
-Korbunio remains free, ad-free, and without user tracking. Every feature remains available regardless of whether a user donates. There is no paywall and no restriction for users who do not donate.
+Korbuino remains free, ad-free, and without user tracking. Every feature remains available regardless of whether a user donates. There is no paywall and no restriction for users who do not donate.
 
 Anyone who voluntarily wants to support ongoing development, new retailer adapters, and maintenance of data sources can send Monero to this public project address:
 
@@ -368,7 +368,7 @@ Anyone who voluntarily wants to support ongoing development, new retailer adapte
 83WjjKs4ijKChStc9GPrpZYa9DXYpHmbSeVipJrQSzMnRdmYtFE4K5D7ff7BsrTDa8TTZvJmAWivgWLEcJpULQ79KpRX8ik
 ```
 
-Donations are entirely optional and do not influence the feature set, access to Korbunio, or prioritisation of individual users.
+Donations are entirely optional and do not influence the feature set, access to Korbuino, or prioritisation of individual users.
 
 ## License and trademarks
 
@@ -376,4 +376,4 @@ The source code is available under the [BSD 3-Clause License](LICENSE).
 
 Copyright © 2026 lesecuritae for Tarnkappe.info.
 
-Korbunio is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
+Korbuino is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
