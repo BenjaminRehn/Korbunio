@@ -92,13 +92,17 @@ interface ShoppingListDao {
     @Query("SELECT * FROM shopping_list_items")
     suspend fun allItems(): List<ShoppingListItemEntity>
 
-    @Query("SELECT shopping_list_items.productId AS productId, products.name AS name, shopping_list_items.quantity AS quantity, shopping_list_items.checked AS checked FROM shopping_list_items INNER JOIN products ON products.id = shopping_list_items.productId WHERE shopping_list_items.listId = 'default' ORDER BY products.name")
+    @Query("SELECT shopping_list_items.productId AS productId, products.name AS name, shopping_list_items.quantity AS quantity, shopping_list_items.checked AS checked, shopping_list_items.note AS note FROM shopping_list_items INNER JOIN products ON products.id = shopping_list_items.productId WHERE shopping_list_items.listId = 'default' ORDER BY products.name")
     fun observeDefault(): Flow<List<ShoppingListRow>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<ShoppingListItemEntity>)
+
+    @Query("DELETE FROM shopping_list_items WHERE listId = 'default' AND productId = :productId")
+    suspend fun remove(productId: String)
 }
 
-data class ShoppingListRow(val productId: String, val name: String, val quantity: Int, val checked: Boolean)
+/** [note] carries the retailer an entry was added from; empty for typed-in items. */
+data class ShoppingListRow(val productId: String, val name: String, val quantity: Int, val checked: Boolean, val note: String = "")
 
 private const val SQLITE_BIND_CHUNK_SIZE = 900

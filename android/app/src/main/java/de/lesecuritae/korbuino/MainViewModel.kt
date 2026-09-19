@@ -45,6 +45,7 @@ data class MainUiState(
     val loading: Boolean = false,
     val offers: List<OfferDisplay> = emptyList(),
     val shoppingItems: List<ShoppingListRow> = emptyList(),
+    val removedShoppingItem: ShoppingListRow? = null,
     val kitchenOwlUrl: String = "",
     val kitchenTargets: List<KitchenOwlTarget> = emptyList(),
     val update: UpdateInfo? = null,
@@ -165,13 +166,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(message = if (enabled) "Tägliche Aktualisierung aktiviert" else "Automatische Aktualisierung deaktiviert")
     }
 
-    fun addShoppingItem(name: String) {
+    fun addShoppingItem(name: String, retailer: String = "") {
         val clean = name.trim().take(120)
         if (clean.isBlank()) return
         viewModelScope.launch {
-            val id = "manual:" + clean.lowercase().replace("[^a-z0-9]+".toRegex(), "-")
+            // One entry per product and retailer, so the same item from two shops stays visible twice.
+            fun slug(value: String) = value.lowercase().replace("[^a-z0-9]+".toRegex(), "-")
+            val id = "manual:" + slug(clean) + if (retailer.isBlank()) "" else "@" + slug(retailer)
             database.productDao().upsertAll(listOf(ProductEntity(id, clean, normalizedKey = id)))
-            database.shoppingListDao().upsertAll(listOf(ShoppingListItemEntity("default", id)))
+            database.shoppingListDao().upsertAll(listOf(ShoppingListItemEntity("default", id, note = retailer.take(60))))
+        }
+    }
+
+    fun removeShoppingItem(item: ShoppingListRow) {
+        viewModelScope.launch {
+            database.shoppingListDao().remove(item.productId)
+            _state.value = _state.value.copy(removedShoppingItem = item)
+        }
+    }
+
+    fun undoRemoveShoppingItem() {
+        val item = _state.value.removedShoppingItem ?: return
+        viewModelScope.launch {
+            database.shoppingListDao().upsertAll(
+                listOf(ShoppingListItemEntity("default", item.productId, item.quantity, item.checked, item.note)),
+            )
+            _state.value = _state.value.copy(removedShoppingItem = null)
         }
     }
 
@@ -402,7 +422,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = _state.value.copy(
                     loading = false,
                     challengeUrl = challenge,
-                    message = if (challenge != null) "Händler-Bestätigung erforderlich" else "Offline/Fehler: ${error?.message ?: "Keine Angebote verfügbar"}",
+                    message = when {
+                        challenge != null -> "Händler-Bestätigung erforderlich"
+                        error != null -> "Offline/Fehler: ${error.message ?: error.javaClass.simpleName}"
+                        rejectedSources > 0 && emptySources == 0 -> "Angebote wegen Datenqualität verworfen"
+                        // Every source answered, none had offers: not a network problem.
+                        else -> "Keine aktuellen Angebote für PLZ ${current.postalCode} gefunden (z. B. kein Markt in der Nähe)"
+                    },
                 )
             }
         }

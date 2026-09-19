@@ -248,19 +248,7 @@ private fun KorbuinoApp(
                         Text("Update ${update.version} installieren")
                     }
                 }
-                var itemText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
-                Text("Einkaufsliste", style = MaterialTheme.typography.titleLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
-                        value = itemText,
-                        onValueChange = { itemText = it.take(120) },
-                        label = { Text("Artikel hinzufügen") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Button(onClick = { viewModel.addShoppingItem(itemText); itemText = "" }) { Text("+") }
-                }
-                state.shoppingItems.forEach { item -> Text("${item.quantity}× ${item.name}") }
+                ShoppingListOverview(state = state, viewModel = viewModel)
             }
           }
         }
@@ -507,7 +495,7 @@ private fun OfferOverview(
                                 )
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                TextButton(onClick = { viewModel.addShoppingItem(offer.productName) }) { Text("Zur Einkaufsliste") }
+                                TextButton(onClick = { viewModel.addShoppingItem(offer.productName, retailerNames[offer.offer.retailerId] ?: offer.offer.retailerId) }) { Text("Zur Einkaufsliste") }
                                 if (state.kitchenTargets.isNotEmpty()) {
                                     TextButton(onClick = { viewModel.syncKitchenOwl(state.kitchenTargets.first()) }) { Text("Auf KitchenOwl") }
                                 }
@@ -532,6 +520,8 @@ internal fun effectivePriceCents(offer: OfferEntity, selectedPrograms: Set<Strin
 @Composable
 private fun ShoppingListOverview(state: MainUiState, viewModel: MainViewModel) {
     var itemText by rememberSaveable { mutableStateOf("") }
+    var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
+    val retailerNames = viewModel.retailers.toMap()
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -547,9 +537,59 @@ private fun ShoppingListOverview(state: MainUiState, viewModel: MainViewModel) {
             )
             Button(onClick = { viewModel.addShoppingItem(itemText); itemText = "" }) { Text("+") }
         }
-        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 360.dp)) {
-            items(state.shoppingItems) { item ->
-                Text("${item.quantity}× ${item.name}", modifier = Modifier.padding(vertical = 6.dp))
+        state.removedShoppingItem?.let { removed ->
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text("„${removed.name}“ entfernt.", modifier = Modifier.weight(1f))
+                TextButton(onClick = viewModel::undoRemoveShoppingItem) { Text("Rückgängig") }
+            }
+        }
+        state.shoppingItems.forEach { item ->
+            val open = item.productId in expanded
+            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                if (item.note.isNotBlank()) {
+                    Text(
+                        "Eingetragen bei ${item.note}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { expanded = if (open) expanded - item.productId else expanded + item.productId }) {
+                        Text(if (open) "Angebote ausblenden" else "Im Angebot?")
+                    }
+                    TextButton(onClick = { viewModel.removeShoppingItem(item) }) { Text("Entfernen") }
+                }
+                if (open) {
+                    val matches = OfferMatcher.matches(item.name, state.offers)
+                    if (matches.isEmpty()) {
+                        Text(
+                            if (state.offers.isEmpty()) "Noch keine Angebote geladen."
+                            else "Aktuell in keinem geladenen Angebot.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        matches.take(8).forEach { match ->
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        retailerNames[match.offer.retailerId] ?: match.offer.retailerId,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(match.productName, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                Text(
+                                    OfferMatcher.formatPrice(match.offer.priceCents),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                        if (matches.size > 8) Text("… und ${matches.size - 8} weitere", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
         if (state.shoppingItems.isEmpty()) {
