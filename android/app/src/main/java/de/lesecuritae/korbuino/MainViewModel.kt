@@ -48,6 +48,9 @@ data class MainUiState(
     val offers: List<OfferDisplay> = emptyList(),
     val shoppingItems: List<ShoppingListRow> = emptyList(),
     val removedShoppingItem: ShoppingListRow? = null,
+    /** Retailers that answered without offers for [emptyRetailersPostal]; hidden in the picker for that code. */
+    val emptyRetailers: Set<String> = emptySet(),
+    val emptyRetailersPostal: String = "",
     val kitchenOwlUrl: String = "",
     val kitchenTargets: List<KitchenOwlTarget> = emptyList(),
     val update: UpdateInfo? = null,
@@ -100,6 +103,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 serverToken = secureStore.get("server_token").orEmpty(),
                 serverMode = secureStore.get("server_mode") == "true",
                 kitchenOwlUrl = secureStore.get("kitchenowl_url").orEmpty(),
+                emptyRetailers = secureStore.get("empty_retailers").orEmpty().split(',').filter(String::isNotBlank).toSet(),
+                emptyRetailersPostal = secureStore.get("empty_retailers_postal").orEmpty(),
                 selectedLoyaltyPrograms = secureStore.get("loyalty_programs")
                     .orEmpty().split(',').filter(String::isNotBlank).toSet(),
             )
@@ -318,6 +323,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }.awaitAll()
             }
+            if (!current.serverMode) rememberEmptyRetailers(current.postalCode, fetched)
             val successes = mutableListOf<Pair<de.lesecuritae.korbuino.providers.RetailerProvider, de.lesecuritae.korbuino.providers.ProviderResult>>()
             var emptySources = 0
             var rejectedSources = 0
@@ -439,6 +445,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+    }
+
+    /** Remembers which retailers answered without offers for this postal code, so the picker can hide them. */
+    private fun rememberEmptyRetailers(
+        postalCode: String,
+        fetched: List<Pair<RetailerProvider, Result<de.lesecuritae.korbuino.providers.ProviderResult>>>,
+    ) {
+        val answered = fetched.filter { it.second.isSuccess }
+        val empty = answered.filter { it.second.getOrNull()?.offers?.isEmpty() == true }.map { it.first.id }
+        val kept = if (_state.value.emptyRetailersPostal == postalCode) {
+            _state.value.emptyRetailers - answered.map { it.first.id }.toSet()
+        } else emptySet()
+        val merged = kept + empty
+        secureStore.put("empty_retailers", merged.sorted().joinToString(","))
+        secureStore.put("empty_retailers_postal", postalCode)
+        _state.value = _state.value.copy(emptyRetailers = merged, emptyRetailersPostal = postalCode)
     }
 
     private fun isChallengeError(error: Throwable): Boolean = ServerFallbackProvider.isBlocked(error)

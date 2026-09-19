@@ -51,7 +51,7 @@ class ProviderRegistry(private val providers: List<RetailerProvider>) {
                     ),
                     surfacePrimaryFailureWhenFallbackEmpty = true,
                 ),
-                HtmlFlyerProvider("holab", "HOL'AB!", "https://holab.de/angebote", http),
+                MarketGateProvider(HtmlFlyerProvider("holab", "HOL'AB!", "https://holab.de/angebote", http), HolabMarkets(http)::hasMarket),
                 // trinkgut has no public API the app can use. Marktguru lists its offers
                 // per postal code and simply has none where no store is nearby, which
                 // is the right answer there; KaufDA is the fallback.

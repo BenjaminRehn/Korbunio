@@ -205,7 +205,9 @@ private fun KorbuinoApp(
                         Text("Händler: ${viewModel.retailers.firstOrNull { it.first == state.retailerId }?.second ?: state.retailerId}")
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        viewModel.retailers.forEach { (id, name) ->
+                        // Hide retailers that had no offers for this postal code on the last load.
+                        val hidden = if (state.postalCode == state.emptyRetailersPostal) state.emptyRetailers else emptySet()
+                        viewModel.retailers.filter { (id, _) -> id == "all" || id == state.retailerId || id !in hidden }.forEach { (id, name) ->
                             DropdownMenuItem(text = { Text(name) }, onClick = { viewModel.retailer(id); menuOpen = false })
                         }
                     }

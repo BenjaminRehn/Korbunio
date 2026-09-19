@@ -46,6 +46,8 @@ class ServerProvider(
             val body = buildJsonObject {
                 put("postal_code", request.postalCode)
                 put("refresh", true)
+                // Lets the app load product images itself, like for its own offers. Older servers ignore it.
+                put("include_image_urls", true)
                 putJsonArray("retailers") { retailerName?.let { add(JsonPrimitive(it)) } }
                 if (singleRetailer) {
                     // One retailer's whole offer list, not just the cheapest hits.
