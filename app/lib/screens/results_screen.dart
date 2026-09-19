@@ -19,7 +19,31 @@ const _sortLabels = {
   'unit_price': 'Grundpreis mit Auswahl',
   'retailer': 'Händler',
   'product': 'Produktname',
+  'category': 'Warengruppe (Abschnitte)',
 };
+
+/// The order of the product groups, like walking through a shop. The server
+/// sorts sections the same way; a group it does not know goes last.
+const _categoryOrder = [
+  'Obst & Gemüse',
+  'Fleisch & Wurst',
+  'Fisch & Meeresfrüchte',
+  'Molkereiprodukte & Eier',
+  'Backwaren',
+  'Kühlprodukte',
+  'Tiefkühl / Eis & Dessert',
+  'Vorräte & Grundnahrungsmittel',
+  'Konserven & Fertiggerichte',
+  'Frühstück & Brotaufstriche',
+  'Getränke',
+  'Snacks',
+  'Drogerie & Körperpflege',
+  'Haushalt & Reinigung',
+  'Tierbedarf',
+  'Baby & Kind',
+  'Wohnen, Freizeit & Non-Food',
+  'Weitere Angebote',
+];
 
 /// The result list, mirroring the web results page: text filter, retailer
 /// chips, category, sorting, duplicate view, loyalty programs, warnings and
@@ -89,6 +113,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   String _retailer = '';
   String _category = '';
   String _sort = 'price';
+  final _collapsedGroups = <String>{};
   String _view = 'best_only';
   late List<String> _loyalty = [...widget.settings.loyaltyPrograms];
 
@@ -760,6 +785,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           if (_shoppingList.configured && _shoppingList.targets.isNotEmpty)
             _listBar(colors),
           if (page != null) _chips(page, colors),
+          if (page != null) _categoryTabs(page, colors),
           const Divider(height: 1),
           Expanded(child: _list(colors)),
         ],
@@ -911,6 +937,102 @@ class _ResultsScreenState extends State<ResultsScreen> {
     );
   }
 
+  Widget _categoryTabs(ResultPage page, KorbColors colors) {
+    final entries = page.categoryCounts.entries.toList()
+      ..sort((a, b) {
+        int rank(String name) {
+          final index = _categoryOrder.indexOf(name);
+          return index < 0 ? _categoryOrder.length : index;
+        }
+
+        final byOrder = rank(a.key).compareTo(rank(b.key));
+        return byOrder != 0
+            ? byOrder
+            : a.key.toLowerCase().compareTo(b.key.toLowerCase());
+      });
+    if (entries.isEmpty) return const SizedBox.shrink();
+    final total = entries.fold<int>(0, (sum, entry) => sum + entry.value);
+
+    return SizedBox(
+      height: 46,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        children: [
+          _Chip(
+            label: 'Alle Warengruppen · $total',
+            active: _category.isEmpty,
+            onTap: () {
+              setState(() => _category = '');
+              _reload();
+            },
+          ),
+          for (final entry in entries)
+            _Chip(
+              label: '${entry.key} · ${entry.value}',
+              active: _category == entry.key,
+              onTap: () {
+                setState(() => _category = entry.key);
+                _reload();
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The list rows: the offers themselves, or, sorted by product group, the
+  /// group names between them. A collapsed group keeps only its heading.
+  List<Object> _rows() {
+    if (_sort != 'category') return List<Object>.of(_offers);
+    final rows = <Object>[];
+    String? current;
+    for (final offer in _offers) {
+      final name = offer.category.isEmpty ? 'Weitere Angebote' : offer.category;
+      if (name != current) {
+        rows.add(name);
+        current = name;
+      }
+      if (!_collapsedGroups.contains(name)) rows.add(offer);
+    }
+    return rows;
+  }
+
+  Widget _groupHeader(String name, KorbColors colors) {
+    final collapsed = _collapsedGroups.contains(name);
+    final count = _page?.categoryCounts[name];
+    return Semantics(
+      button: true,
+      expanded: !collapsed,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() {
+          collapsed ? _collapsedGroups.remove(name) : _collapsedGroups.add(name);
+        }),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: colors.chip,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: colors.line),
+          ),
+          child: Row(
+            children: [
+              Icon(collapsed ? Icons.chevron_right : Icons.expand_more),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  count == null ? name : '$name · $count',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _list(KorbColors colors) {
     final page = _page;
     if (_error.isNotEmpty && _offers.isEmpty) {
@@ -936,14 +1058,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
       );
     }
 
+    final rows = _rows();
     return ListView.separated(
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-      itemCount: _offers.length + 1,
+      itemCount: rows.length + 1,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
-        if (index == _offers.length) return _footer(colors);
-        final offer = _offers[index];
+        if (index == rows.length) return _footer(colors);
+        final row = rows[index];
+        if (row is String) return _groupHeader(row, colors);
+        final offer = row as Offer;
         return OfferCard(
           offer: offer,
           imageUrl: widget.client.imageUrl(offer.imageUrl),
