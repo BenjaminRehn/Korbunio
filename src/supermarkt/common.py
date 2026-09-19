@@ -777,7 +777,7 @@ def parse_price_text(value: Any) -> Optional[float]:
 def parse_base_price_text(value: Any) -> tuple[Optional[float], str]:
     text = clean_text(value)
     match = re.search(
-        r"(?:1\s*)?(kg|kilogramm|l|liter|wl|waschladungen?|stück|stueck|stk\.?)\s*=\s*(\d+(?:[.,]\d{1,2})?)"
+        r"(?:1\s*)?(kg|kilogramm|l|liter|wl|waschladungen?|stück|stueck|stk\.?)\s*=\s*(?:€\s*)?(\d+(?:[.,]\d{1,2})?)"
         r"|(?<!\d)(\d+(?:[.,]\d{1,2})?)\s*(?:€\s*)?[/]\s*(?:1\s*)?(kg|kilogramm|l|liter|wl|waschladungen?|stück|stueck|stk\.?)",
         text,
         flags=re.IGNORECASE,
