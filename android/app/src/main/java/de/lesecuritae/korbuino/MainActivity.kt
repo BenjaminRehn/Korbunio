@@ -12,12 +12,16 @@ import de.lesecuritae.korbuino.data.OfferEntity
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -82,6 +86,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             KorbuinoApp(
                 openChallenge = { url -> challengeLauncher.launch(ChallengeActivity.intent(this, url)) },
@@ -169,6 +174,7 @@ private fun KorbuinoApp(
     )
     MaterialTheme(colorScheme = if (dark) darkScheme else lightScheme) {
         Surface(modifier = Modifier.fillMaxSize()) {
+          Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             if (showOverview && state.offers.isNotEmpty()) {
                 OfferOverview(
                     state = state,
@@ -256,6 +262,7 @@ private fun KorbuinoApp(
                 }
                 state.shoppingItems.forEach { item -> Text("${item.quantity}× ${item.name}") }
             }
+          }
         }
     }
 }
