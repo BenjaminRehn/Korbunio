@@ -16,9 +16,13 @@ class ProviderRegistry(private val providers: List<RetailerProvider>) {
                     "aldi-sued", "ALDI Süd", "https://www.aldi-sued.de/angebote", http,
                     renderedHtmlProvider = { RenderedPageStore.consume("https://www.aldi-sued.de/angebote") },
                 ),
+                // Regional prices first (needs the city); without it the default-region page and Marktguru.
                 FallbackRetailerProvider(
-                    HtmlFlyerProvider("kaufland", "Kaufland", "https://filiale.kaufland.de/angebote/uebersicht.html?kloffer-week=current", http),
-                    MarktguruProvider("Kaufland", http),
+                    KauflandProvider(http),
+                    FallbackRetailerProvider(
+                        HtmlFlyerProvider("kaufland", "Kaufland", "https://filiale.kaufland.de/angebote/uebersicht.html?kloffer-week=current", http),
+                        MarktguruProvider("Kaufland", http),
+                    ),
                 ),
                 FallbackRetailerProvider(
                     HtmlFlyerProvider(
