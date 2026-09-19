@@ -22,7 +22,8 @@ Der Hintergrundprozess läuft in einem separaten Container und kann Cookies aus
 dem Browser des Nutzers nicht heimlich lesen. Bei einer Müller-Challenge zeigt
 die Ergebnisansicht deshalb einen Link zur offiziellen Müller-Seite. Danach
 kann der Nutzer den Cookie-Header der Müller-Domain ausdrücklich über die
-angezeigte Session-Seite übergeben. Korbuino hält ihn nur kurz im
+angezeigte Session-Seite übergeben; die Seite beschreibt, wie man den Header in den
+Entwicklerwerkzeugen des Browsers findet. Korbuino hält ihn nur kurz im
 Arbeitsspeicher, sendet ihn ausschließlich an Müller und löscht ihn bei Ablauf
 oder einer erneuten Challenge. Er landet nicht in SQLite, Backups, Logs oder
 API-Antworten.

@@ -13,6 +13,10 @@
 - KitchenOwl in der Flutter-App: Aus „GUT & GÜNSTIG - Kaiserbrötchen“ wurde der
   Artikel „& - Kaiserbrötchen“. Zeichen ohne Buchstaben oder Ziffern bleiben
   jetzt aus dem Artikelnamen heraus.
+- Server: Die Müller-Bestätigungsseite erklärt jetzt Schritt für Schritt, wo der
+  Cookie-Header zu finden ist (Entwicklerwerkzeuge, Reiter „Netzwerk“, Anfrage
+  an www.mueller.de, Zeile „cookie“). Ein mitkopiertes „Cookie:“ vor dem Wert
+  wird erkannt und entfernt.
 - Die Bestätigungsseite für EDEKA stürzte auf Android 8 bis 10 ab, weil sie
   `WindowInsets.CONSUMED` (ab Android 11) benutzte. Behoben.
 - Der Prüflauf der nativen App in GitHub Actions lief seit dem

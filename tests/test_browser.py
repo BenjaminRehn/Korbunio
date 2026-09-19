@@ -34,6 +34,10 @@ def test_mueller_challenge_explains_explicit_session_handoff():
     assert response.status_code == 200
     assert "www.mueller.de/c/online-angebote/" in response.text
     assert "Cookie-Header" in response.text
+    # The page also says where the header is and how to get there.
+    assert "F12" in response.text
+    assert "Netzwerk" in response.text
+    assert "Anfrage-Header" in response.text
 
 
 def test_mueller_session_handoff_does_not_echo_cookie():
@@ -297,3 +301,15 @@ def test_browser_netto_market_lookup_returns_all_exact_matches(monkeypatch):
     response = TestClient(app).get("/netto/markets", params={"postal_code": "12345"})
     assert response.status_code == 200
     assert [market["market_id"] for market in response.json()["markets"]] == ["10", "20"]
+
+
+def test_mueller_cookie_keeps_a_copied_header_name_out_of_the_value():
+    from supermarkt.challenges import MuellerSessionStore
+
+    store = MuellerSessionStore()
+    store.set("Cookie: a=1; b=2")
+    assert store.get() == "a=1; b=2"
+    store.set("cookie:c=3")
+    assert store.get() == "c=3"
+    store.set("d=4")
+    assert store.get() == "d=4"

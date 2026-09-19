@@ -26,6 +26,9 @@ class MuellerSessionStore:
         value = str(cookie or "").strip()
         if not value or len(value) > self.MAX_COOKIE_LENGTH or any(char in value for char in "\r\n"):
             raise ValueError("Ungültige Müller-Session")
+        # Browsers show the header as "cookie: a=b"; a copied name is not part of the value.
+        if value[:7].lower() == "cookie:":
+            value = value[7:].strip()
         # A Cookie header consists of semicolon-separated name/value pairs.
         # Reject arbitrary pasted text so the value cannot become a header
         # injection or an accidental password/token submission.
