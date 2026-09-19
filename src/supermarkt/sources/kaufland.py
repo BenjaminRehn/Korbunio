@@ -22,6 +22,12 @@ from ..images import is_rejected_image_url, normalize_image_url
 from ..models import LoyaltyBenefit, Offer, ToolError
 from .browser import chromium_command
 
+def _german_date(value: Any) -> str:
+    """2026-09-17 -> 17.09.2026; alles andere bleibt unverändert."""
+    match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", str(value).strip())
+    return f"{match.group(3)}.{match.group(2)}.{match.group(1)}" if match else str(value)
+
+
 class KauflandOfficialAnchorParser(HTMLParser):
     IMAGE_ATTRS = (
         "data-src",
@@ -939,7 +945,7 @@ class OfficialKauflandSource:
                         offer_id=f"kaufland-official:{offer_id}", retailer="Kaufland", category=category_name,
                         name=name, brand=title if subtitle else "", description=description, price=price,
                         base_price=base_price, base_unit=base_unit, pack_signature=pack,
-                        validity_label=f"Kaufland, gültig {valid_from} bis {valid_until}",
+                        validity_label=f"Kaufland, gültig {_german_date(valid_from)} bis {_german_date(valid_until)}",
                         match_key=build_match_key(title if subtitle else "", name, pack, offer_id),
                         source_url=overview_url, image_url=image_url, retailer_url=store_url,
                         coverage_note=f"Offizielle Filialangebote für {selector}", benefits=benefits,

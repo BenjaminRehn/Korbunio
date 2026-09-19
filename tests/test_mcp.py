@@ -11,7 +11,7 @@ from supermarkt.asgi import app
 
 OFFERS = [
     {"offer_id": "a", "retailer": "Kaufland", "product": "Hochland Schmelzkäse", "pack": "200 g", "unit_price": "7,95 €/kg",
-     "regular_price_text": "1,99 €", "effective_price": 1.99, "effective_price_text": "1,99 €", "validity": "bis Samstag", "image_url": "https://img.example/a.jpg"},
+     "regular_price_text": "1,99 €", "effective_price": 1.99, "effective_price_text": "1,99 €", "validity": "Kaufland, gültig 2026-09-17 bis 2026-09-23", "image_url": "https://img.example/a.jpg"},
     {"offer_id": "b", "retailer": "REWE", "product": "Schmelzkäse", "pack": "", "unit_price": "",
      "regular_price_text": "1,49 €", "effective_price": 1.49, "effective_price_text": "1,49 €", "validity": "gültig bis 20.09.", "image_url": None},
 ]
@@ -54,6 +54,7 @@ def test_find_offers_lists_cheapest_first_with_bonus_price_and_image():
     assert offers[1]["bonus_program"] == "Kaufland Card" and offers[0]["price_with_bonus"] is None
     text = result.content[0].text
     assert "1,59 € mit Kaufland Card" in text and "gültig gültig" not in text
+    assert "gültig 17.09.2026 bis 23.09.2026" in text and "Kaufland, gültig" not in text
     assert [block.type for block in result.content].count("image") == 1
 
 

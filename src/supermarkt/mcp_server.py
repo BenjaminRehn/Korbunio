@@ -21,6 +21,7 @@ import base64
 import contextlib
 import logging
 import os
+import re
 import time
 from typing import Any, Optional
 
@@ -206,6 +207,13 @@ def _image_block(offer: Offer) -> ImageContent | None:
     return ImageContent(type="image", data=base64.b64encode(image.data).decode("ascii"), mime_type=image.content_type)
 
 
+def _valid_text(offer: Offer) -> str:
+    """Gültigkeit lesbar: deutsche Daten, ohne vorangestellten Händlernamen."""
+    text = re.sub(r"(\d{4})-(\d{2})-(\d{2})", r"\3.\2.\1", offer.valid)
+    prefix = offer.retailer + ", "
+    return text[len(prefix):] if text.startswith(prefix) else text
+
+
 def _summary(result: OfferResult) -> str:
     lines = [f"{result.found} Treffer für „{result.query}“ (PLZ {result.postal_code}), günstigste zuerst:"]
     for offer in result.offers:
@@ -214,9 +222,10 @@ def _summary(result: OfferResult) -> str:
             line += f", {offer.price_with_bonus} mit {offer.bonus_program or 'Bonusprogramm'}"
         if offer.unit_price:
             line += f" ({offer.unit_price})"
-        if offer.valid:
+        valid = _valid_text(offer)
+        if valid:
             # Manche Quellen schreiben schon "gültig ..." in die Angabe.
-            line += ", " + (offer.valid if "gültig" in offer.valid.casefold() else f"gültig {offer.valid}")
+            line += ", " + (valid if "gültig" in valid.casefold() else f"gültig {valid}")
         lines.append(line)
     return "\n".join(lines)
 
