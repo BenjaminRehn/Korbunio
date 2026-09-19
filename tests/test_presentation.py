@@ -55,3 +55,26 @@ def test_published_multipack_total_is_not_inferred_as_per_container_deposit():
         include_image_urls=False,
     )
     assert result["deposit_note"] == "zzgl. 3,10 € Pfand"
+
+
+def _in_category(category, name, price):
+    return Offer(
+        offer_id=f"{category}-{name}", retailer="REWE", category=category, name=name, brand="", description="",
+        price=price, base_price=None, base_unit="", pack_signature="", validity_label="Aktuell",
+        match_key=f"{name}|", source_url="https://example.invalid/",
+    )
+
+
+def test_sort_by_category_follows_the_shop_walk_through_and_ends_with_other_offers():
+    from supermarkt.presentation import offer_sort_key
+
+    offers = [
+        _in_category("Weitere Angebote", "Zeitschrift", 1.0),
+        _in_category("Getränke", "Cola", 0.9),
+        _in_category("Obst & Gemüse", "Tomaten", 2.5),
+        _in_category("Obst & Gemüse", "Äpfel", 1.5),
+        _in_category("Unbekannt", "Etwas", 0.1),
+    ]
+    ordered = [offer.name for offer in sorted(offers, key=lambda offer: offer_sort_key(offer, "category"))]
+    # Within a category the cheaper offer comes first; unknown categories go last.
+    assert ordered == ["Äpfel", "Tomaten", "Cola", "Zeitschrift", "Etwas"]

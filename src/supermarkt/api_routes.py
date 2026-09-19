@@ -145,7 +145,7 @@ def result_data(
     page_size: int = Query(default=100, ge=1, le=100),
     view: Literal["best_only", "all"] = Query(default="best_only"),
     loyalty: str = Query(default="", max_length=500),
-    sort: Literal["price", "unit_price", "retailer", "product"] = Query(default="price"),
+    sort: Literal["price", "unit_price", "retailer", "product", "category"] = Query(default="price"),
     _: None = Depends(require_app_result_auth),
 ) -> dict[str, Any]:
     verify_result_token(search_id, token)

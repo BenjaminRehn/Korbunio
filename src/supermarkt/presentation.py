@@ -11,6 +11,7 @@ from .common import (
     format_unit_price,
     normalize_base_unit,
 )
+from .categories import CATEGORIES
 from .loyalty import benefit_label
 from .models import Offer, RetailerContext
 
@@ -40,6 +41,14 @@ def offer_sort_key(offer: Offer, sort: str) -> tuple[Any, ...]:
     )
     normalized_price = float("inf") if price is None else float(price)
 
+    if sort == "category":
+        # Sections follow the fixed order of CATEGORIES (produce first, "Weitere
+        # Angebote" last) so the groups read like a shop walk-through.
+        try:
+            position = CATEGORIES.index(offer.category)
+        except ValueError:
+            position = len(CATEGORIES)
+        return (position, normalized_price, offer.name.casefold(), offer.retailer.casefold())
     if sort == "retailer":
         return (offer.retailer.casefold(), normalized_price, offer.name.casefold())
     if sort == "product":

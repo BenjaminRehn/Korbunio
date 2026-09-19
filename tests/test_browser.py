@@ -382,3 +382,16 @@ def test_mueller_challenge_page_names_the_right_tab_and_the_ad_blocker():
     assert "im Müller-Tab" in text
     assert "uBlock" in text
     assert "Als cURL kopieren" in text
+
+
+def test_results_page_has_category_tabs_and_a_sort_by_category():
+    page = TestClient(app).get("/results")
+    text = page.text if page.status_code == 200 else ""
+    if not text:
+        from pathlib import Path
+        text = (Path(__file__).parents[1] / "src/supermarkt/static/results.html").read_text(encoding="utf-8")
+    assert 'id="categoryChips"' in text
+    assert 'value="category"' in text
+    script = TestClient(app).get("/static/results-v2.js").text
+    assert "renderCategoryTabs" in script
+    assert "collapsedGroups" in script

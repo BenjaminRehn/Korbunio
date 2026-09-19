@@ -42,7 +42,7 @@ class SupermarketRequest(BaseModel):
             + ", ".join(program.id for program in PROGRAMS)
         ),
     )
-    sort: Literal["price", "unit_price", "retailer", "product"] = Field(default="price")
+    sort: Literal["price", "unit_price", "retailer", "product", "category"] = Field(default="price")
     refresh: bool = Field(default=False, description="Servercache ignorieren und Quellen neu abrufen")
     include_image_urls: bool = Field(
         default=False,

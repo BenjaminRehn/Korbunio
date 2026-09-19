@@ -4,17 +4,18 @@ const pageData=document.body.dataset,searchId=pageData.searchId,token=pageData.t
 const FILTER_STORAGE_KEY="korbunio.result-filters.v1",KEYWORD_ENABLED_KEY="korbunio.keyword-filter-enabled.v1";
 const selectedPrograms=new Set((pageData.loyalty||"").split(",").filter(Boolean)),selectedRetailers=new Set(),offerById=new Map();
 const $=id=>document.getElementById(id),esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let page=1,loading=false,done=false,category="",view="best_only",debounce=null,requestSeq=0,controller=null,lightboxTrigger=null,programsInitialized=false,keywords=[],keywordEnabled=false;
+const collapsedGroups=new Set(),CATEGORY_ORDER=["Obst & Gemüse","Fleisch & Wurst","Fisch & Meeresfrüchte","Molkereiprodukte & Eier","Backwaren","Kühlprodukte","Tiefkühl / Eis & Dessert","Vorräte & Grundnahrungsmittel","Konserven & Fertiggerichte","Frühstück & Brotaufstriche","Getränke","Snacks","Drogerie & Körperpflege","Haushalt & Reinigung","Tierbedarf","Baby & Kind","Wohnen, Freizeit & Non-Food","Weitere Angebote"];
+let lastGroup=null,page=1,loading=false,done=false,category="",view="best_only",debounce=null,requestSeq=0,controller=null,lightboxTrigger=null,programsInitialized=false,keywords=[],keywordEnabled=false;
 
 try{keywords=normalizeKeywords(JSON.parse(localStorage.getItem(KEYWORD_STORAGE_KEY)||"[]"))}catch(_error){}
 try{const stored=localStorage.getItem(KEYWORD_ENABLED_KEY);keywordEnabled=stored===null?keywords.length>0:stored==="true"}catch(_error){}
-try{const saved=JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY)||"{}");category=String(saved.category||"");if(["price","unit_price","retailer","product"].includes(saved.sort))$("sort").value=saved.sort;if(Array.isArray(saved.retailers))for(const name of saved.retailers)if(typeof name==="string"&&name)selectedRetailers.add(name)}catch(_error){}
+try{const saved=JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY)||"{}");category=String(saved.category||"");if(["price","unit_price","retailer","product","category"].includes(saved.sort))$("sort").value=saved.sort;if(Array.isArray(saved.retailers))for(const name of saved.retailers)if(typeof name==="string"&&name)selectedRetailers.add(name)}catch(_error){}
 
 function persistFilters(){try{localStorage.setItem(FILTER_STORAGE_KEY,JSON.stringify({category,sort:$("sort").value,retailers:[...selectedRetailers]}))}catch(_error){}}
 function syncLoyaltyUrl(){const url=new URL(location.href),value=[...selectedPrograms].sort().join(",");value?url.searchParams.set("loyalty",value):url.searchParams.delete("loyalty");history.replaceState(null,"",url)}
 function safeUrl(value){try{const u=new URL(value);return u.protocol==="https:"&&["www.lidl.de","lidl.de","www.rewe.de","shop.rewe.de"].includes(u.hostname.toLowerCase())?u.href:""}catch{return ""}}
 function query(reset=false){
-  if(reset){requestSeq++;controller?.abort();loading=false;page=1;done=false;offerById.clear();$("rows").innerHTML=""}
+  if(reset){requestSeq++;controller?.abort();loading=false;page=1;done=false;offerById.clear();lastGroup=null;$("rows").innerHTML=""}
   if(loading||done)return;
   loading=true;const seq=requestSeq;controller=new AbortController();
   const params=new URLSearchParams({token,page:String(page),page_size:"100",q:$("q").value,category,sort:$("sort").value,view,loyalty:[...selectedPrograms].sort().join(",")});
@@ -68,12 +69,23 @@ function render(data){
     warningNodes.push(box);
   }
   $("warningsBox").hidden=!warningNodes.length;$("warnings").replaceChildren(...warningNodes);
-  const fragment=document.createDocumentFragment();
+  const fragment=document.createDocumentFragment(),grouped=$("sort").value==="category",categoryCounts=data.category_counts||{};
+  let holder=fragment;
+  const groupFor=name=>{
+    if(lastGroup&&lastGroup.name===name)return lastGroup.body;
+    const section=document.createElement("section"),head=document.createElement("button"),body=document.createElement("div");
+    section.className="group";head.type="button";head.className="groupHeader";body.className="groupBody";
+    const collapsed=collapsedGroups.has(name);head.ariaExpanded=String(!collapsed);body.hidden=collapsed;
+    head.textContent=`${name} · ${categoryCounts[name]??""}`.replace(/ · $/,"");
+    head.onclick=()=>{const hide=!body.hidden;body.hidden=hide;head.ariaExpanded=String(!hide);hide?collapsedGroups.add(name):collapsedGroups.delete(name)};
+    section.append(head,body);fragment.appendChild(section);lastGroup={name,body};return body;
+  };
   for(const offer of data.offers){
+    if(grouped)holder=groupFor(offer.category||"Weitere Angebote");
     offerById.set(offer.offer_id,offer);const row=document.createElement("div");row.className="row";
     const image=offer.image_url?`<button type="button" class="imageButton" data-src="${esc(offer.image_url)}" data-alt="${esc(offer.product)}"><img class="thumb" loading="lazy" src="${esc(offer.image_url)}" alt="${esc(offer.product)}"></button>`:`<div class="thumb" aria-hidden="true"></div>`,target=safeUrl(offer.product_url),linkLabel=offer.product_link_kind==="search"?"Offizielle Produktsuche":offer.product_link_kind==="market_offer"?"Angebotsseite des gewählten Markts":"",linkNote=target&&linkLabel?`<div class="small">${linkLabel}</div>`:"",product=target?`<a href="${esc(target)}" target="_blank" rel="noopener noreferrer">${esc(offer.product)}</a>${linkNote}`:esc(offer.product),deposit=offer.deposit_note?`<div class="small">${esc(offer.deposit_note)}</div>`:"",cashback=offer.cashback_credit_note?`<div class="small cashbackCredit">${esc(offer.cashback_credit_note)}</div>`:"",condition=offer.offer_condition?`<div class="small">${esc(offer.offer_condition)}</div>`:"";
     row.innerHTML=`<div>${image}</div><div class="retailer"><strong>${esc(offer.retailer)}</strong></div><div class="productblock"><div class="product">${product}</div><div class="categoryLabel">${esc(offer.category)}</div><div class="small">${esc(offer.description)}</div>${condition}<button type="button" class="shoppingAdd" data-offer-id="${esc(offer.offer_id)}">Zur Einkaufsliste</button></div><div class="regularPrice price ${esc(offer.regular_comparison_state)}" data-label="Ohne Bonus">${esc(offer.regular_price_text)}</div><div class="selectedPrice price ${esc(offer.selected_comparison_state)}" data-label="Mit Bonuswahl">${esc(offer.effective_price_text)}${cashback}${deposit}</div><div class="details"><div>${esc(offer.pack)}</div><div class="small">${esc(offer.unit_price)}</div></div><div class="validity small">${esc(offer.validity)}</div>`;
-    fragment.appendChild(row);
+    holder.appendChild(row);
   }
   $("rows").appendChild(fragment);
 }
@@ -82,7 +94,13 @@ function renderChips(counts){
   const add=(name,count)=>{const button=document.createElement("button"),active=name?selectedRetailers.has(name):selectedRetailers.size===0;button.className="chip"+(active?" active":"");button.ariaPressed=String(active);button.textContent=name?`${name} · ${count}`:`Alle Händler · ${entries.reduce((sum,[,number])=>sum+number,0)}`;button.onclick=event=>{if(!name)selectedRetailers.clear();else if(event.shiftKey){selectedRetailers.has(name)?selectedRetailers.delete(name):selectedRetailers.add(name)}else{selectedRetailers.clear();selectedRetailers.add(name)}category="";persistFilters();query(true)};box.appendChild(button)};
   add("",0);entries.sort((a,b)=>a[0].localeCompare(b[0],"de")).forEach(([name,count])=>add(name,count));
 }
-function renderCategories(counts){const select=$("category"),current=category;select.innerHTML='<option value="">Alle Kategorien</option>';Object.entries(counts).sort((a,b)=>a[0].localeCompare(b[0],"de")).forEach(([name,count])=>select.add(new Option(`${name} · ${count}`,name)));select.value=current;if(current&&!select.value){category="";persistFilters()}}
+function renderCategoryTabs(counts){
+  const box=$("categoryChips"),entries=Object.entries(counts||{}).sort((a,b)=>{const ia=CATEGORY_ORDER.indexOf(a[0]),ib=CATEGORY_ORDER.indexOf(b[0]);return (ia<0?99:ia)-(ib<0?99:ib)||a[0].localeCompare(b[0],"de")});
+  box.innerHTML="";box.hidden=!entries.length;
+  const add=(name,label)=>{const button=document.createElement("button"),active=name===category;button.type="button";button.className="chip"+(active?" active":"");button.setAttribute("role","tab");button.ariaSelected=String(active);button.textContent=label;button.onclick=()=>{category=name;persistFilters();query(true)};box.appendChild(button)};
+  add("",`Alle Warengruppen · ${entries.reduce((sum,[,number])=>sum+number,0)}`);entries.forEach(([name,count])=>add(name,`${name} · ${count}`));
+}
+function renderCategories(counts){renderCategoryTabs(counts);const select=$("category"),current=category;select.innerHTML='<option value="">Alle Kategorien</option>';Object.entries(counts).sort((a,b)=>a[0].localeCompare(b[0],"de")).forEach(([name,count])=>select.add(new Option(`${name} · ${count}`,name)));select.value=current;if(current&&!select.value){category="";persistFilters()}}
 function renderMarkets(markets){const box=$("marketBox"),list=$("marketList");box.hidden=!markets.length;list.replaceChildren(...markets.map(market=>{const item=document.createElement("li"),strong=document.createElement("strong");strong.textContent=`${market.retailer}: `;item.append(strong,document.createTextNode(market.label));return item}))}
 function updateLoyaltySummary(){const selected=[...$("loyaltyPrograms").querySelectorAll("input:checked")].map(input=>input.nextElementSibling?.textContent).filter(Boolean);$("loyaltySummary").textContent=selected.length?selected.join(", "):"Keine ausgewählt"}
 function renderPrograms(programs,note){
