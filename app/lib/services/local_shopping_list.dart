@@ -95,4 +95,15 @@ class LocalShoppingListStore {
       ..removeWhere((entry) => entry.offer.key == key);
     await _write(entries);
   }
+
+  /// Puts an entry back where it was after an accidental removal. Does
+  /// nothing if the offer is already on the list again.
+  Future<void> restore(LocalShoppingListEntry entry, int index) async {
+    final entries = await loadEntries();
+    if (entries.any((item) => item.offer.key == entry.offer.key)) return;
+    entries.insert(index.clamp(0, entries.length), entry);
+    await _write(entries);
+  }
+
+  Future<void> clear() => _write(const []);
 }

@@ -18,7 +18,9 @@ class OfferCard extends StatelessWidget {
     required this.sending,
     required this.onAddToList,
     required this.onOpenSource,
+    this.onLocalList = false,
     this.onAddToKitchenOwl,
+    this.onRemoveFromKitchenOwl,
   });
 
   final Offer offer;
@@ -37,13 +39,22 @@ class OfferCard extends StatelessWidget {
   final String? filedIn;
   final bool sending;
 
-  /// Adds the offer to the app's local list. Null hides that button, which
+  /// Toggles the offer on the app's local list: adds it, or removes it when
+  /// [onLocalList] says it is already there. Null hides that button, which
   /// is what "only KitchenOwl" in the settings means.
   final VoidCallback? onAddToList;
+
+  /// Whether the offer is already on the local list.
+  final bool onLocalList;
   final VoidCallback onOpenSource;
 
   /// Files the offer in KitchenOwl. Null while no KitchenOwl is connected.
   final VoidCallback? onAddToKitchenOwl;
+
+  /// Takes a filed offer off the KitchenOwl list again. Null where the app
+  /// cannot do that, in which case a filed offer stays as it is and is
+  /// removed by checking it off in KitchenOwl.
+  final VoidCallback? onRemoveFromKitchenOwl;
 
   Color _stateColor(String state, KorbColors colors) =>
       state == 'best' ? colors.good : colors.text;
@@ -195,8 +206,15 @@ class OfferCard extends StatelessWidget {
               if (onAddToList != null)
                 TextButton.icon(
                   onPressed: sending ? null : onAddToList,
-                  icon: const Icon(Icons.add_shopping_cart, size: 18),
-                  label: const Text('Zur Einkaufsliste'),
+                  icon: Icon(
+                    onLocalList
+                        ? Icons.remove_shopping_cart_outlined
+                        : Icons.add_shopping_cart,
+                    size: 18,
+                  ),
+                  label: Text(
+                    onLocalList ? 'Von Liste entfernen' : 'Zur Einkaufsliste',
+                  ),
                   style: TextButton.styleFrom(
                     foregroundColor: colors.accent,
                     disabledForegroundColor: colors.muted,
@@ -205,8 +223,10 @@ class OfferCard extends StatelessWidget {
                 ),
               if (onAddToKitchenOwl != null)
                 TextButton.icon(
-                  onPressed: sending || filedIn != null
+                  onPressed: sending
                       ? null
+                      : filedIn != null
+                      ? onRemoveFromKitchenOwl
                       : onAddToKitchenOwl,
                   icon: sending
                       ? const SizedBox(
@@ -215,11 +235,19 @@ class OfferCard extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Icon(
-                          filedIn != null ? Icons.check : Icons.playlist_add,
+                          filedIn == null
+                              ? Icons.playlist_add
+                              : onRemoveFromKitchenOwl != null
+                              ? Icons.playlist_remove
+                              : Icons.check,
                           size: 18,
                         ),
                   label: Text(
-                    filedIn != null ? 'in $filedIn' : 'Auf KitchenOwl',
+                    filedIn == null
+                        ? 'Auf KitchenOwl'
+                        : onRemoveFromKitchenOwl != null
+                        ? 'Aus KitchenOwl entfernen'
+                        : 'in $filedIn',
                   ),
                   style: TextButton.styleFrom(
                     foregroundColor: filedIn != null

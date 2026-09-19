@@ -26,6 +26,54 @@ class _LocalShoppingListScreenState extends State<LocalShoppingListScreen> {
     if (mounted) setState(() => _entries = entries);
   }
 
+  Future<void> _remove(LocalShoppingListEntry entry) async {
+    final index = _entries.indexOf(entry);
+    final messenger = ScaffoldMessenger.of(context);
+    await widget.store.remove(entry.offer.key);
+    await _reload();
+    if (!mounted) return;
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${entry.offer.product} entfernt.'),
+          action: SnackBarAction(
+            label: 'Rückgängig',
+            onPressed: () async {
+              await widget.store.restore(entry, index);
+              await _reload();
+            },
+          ),
+        ),
+      );
+  }
+
+  Future<void> _confirmClear() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Liste leeren?'),
+        content: Text(
+          'Alle ${_entries.length} Einträge werden von der lokalen '
+          'Einkaufsliste entfernt.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Leeren'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.store.clear();
+    await _reload();
+  }
+
   String _euro(double value) =>
       '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
 
@@ -45,6 +93,11 @@ class _LocalShoppingListScreenState extends State<LocalShoppingListScreen> {
     appBar: AppBar(
       title: const Text('Lokale Einkaufsliste'),
       actions: [
+        IconButton(
+          tooltip: 'Liste leeren',
+          onPressed: _entries.isEmpty ? null : _confirmClear,
+          icon: const Icon(Icons.delete_sweep_outlined),
+        ),
         IconButton(
           tooltip: 'Liste kopieren',
           onPressed: _entries.isEmpty
@@ -73,57 +126,17 @@ class _LocalShoppingListScreenState extends State<LocalShoppingListScreen> {
                   padding: const EdgeInsets.all(12),
                   itemCount: _entries.length,
                   separatorBuilder: (_, _) => const Divider(),
-                  itemBuilder: (_, index) {
-                    final entry = _entries[index];
-                    final offer = entry.offer;
-                    return ListTile(
-                      title: Text(offer.product),
-                      subtitle: Text(ShoppingListText.lineFor(offer)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Menge verringern',
-                            onPressed: entry.quantity <= 1
-                                ? null
-                                : () async {
-                                    await widget.store.setQuantity(
-                                      offer.key,
-                                      entry.quantity - 1,
-                                    );
-                                    await _reload();
-                                  },
-                            icon: const Icon(Icons.remove_circle_outline),
-                          ),
-                          Text(
-                            '${entry.quantity}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          IconButton(
-                            tooltip: 'Menge erhöhen',
-                            onPressed: entry.quantity >= 99
-                                ? null
-                                : () async {
-                                    await widget.store.setQuantity(
-                                      offer.key,
-                                      entry.quantity + 1,
-                                    );
-                                    await _reload();
-                                  },
-                            icon: const Icon(Icons.add_circle_outline),
-                          ),
-                          IconButton(
-                            tooltip: 'Entfernen',
-                            onPressed: () async {
-                              await widget.store.remove(offer.key);
-                              await _reload();
-                            },
-                            icon: const Icon(Icons.delete_outline),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  itemBuilder: (_, index) => _EntryTile(
+                    entry: _entries[index],
+                    onQuantity: (quantity) async {
+                      await widget.store.setQuantity(
+                        _entries[index].offer.key,
+                        quantity,
+                      );
+                      await _reload();
+                    },
+                    onRemove: () => _remove(_entries[index]),
+                  ),
                 ),
               ),
               SafeArea(
@@ -160,6 +173,87 @@ class _LocalShoppingListScreenState extends State<LocalShoppingListScreen> {
   );
 }
 
+/// One list entry. Product and retailer get their own lines and the controls
+/// sit on a row of their own, so nothing is pushed off the edge on narrow
+/// screens or with a large system font.
+class _EntryTile extends StatelessWidget {
+  const _EntryTile({
+    required this.entry,
+    required this.onQuantity,
+    required this.onRemove,
+  });
+
+  final LocalShoppingListEntry entry;
+  final ValueChanged<int> onQuantity;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final offer = entry.offer;
+    final theme = Theme.of(context);
+    final details = ShoppingListText.detailsFor(offer);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            offer.product,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (offer.retailerText.isNotEmpty)
+                Chip(
+                  label: Text(offer.retailerText),
+                  avatar: const Icon(Icons.storefront_outlined, size: 16),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              if (details.isNotEmpty)
+                Text(details, style: theme.textTheme.bodyMedium),
+            ],
+          ),
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Menge verringern',
+                onPressed: entry.quantity <= 1
+                    ? null
+                    : () => onQuantity(entry.quantity - 1),
+                icon: const Icon(Icons.remove_circle_outline),
+              ),
+              Text(
+                '${entry.quantity}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              IconButton(
+                tooltip: 'Menge erhöhen',
+                onPressed: entry.quantity >= 99
+                    ? null
+                    : () => onQuantity(entry.quantity + 1),
+                icon: const Icon(Icons.add_circle_outline),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Entfernen',
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TotalRow extends StatelessWidget {
   const _TotalRow({
     required this.label,
@@ -176,10 +270,13 @@ class _TotalRow extends StatelessWidget {
     final style = emphasized
         ? const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)
         : null;
+    // The label may wrap on a narrow screen or with a large system font;
+    // the amount always keeps its full width so it is never cut off.
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: style),
+        Expanded(child: Text(label, style: style)),
+        const SizedBox(width: 12),
         Text(value, style: style),
       ],
     );
