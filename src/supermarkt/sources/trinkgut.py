@@ -667,7 +667,7 @@ class OfficialTrinkgutSource:
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
                 fetched = list(executor.map(fetch_full_desc, need_fetch))
             stamp = time.time()
-            for (idx, url), (_, deposit) in zip(need_fetch, fetched):
+            for (_idx, url), (_, deposit) in zip(need_fetch, fetched, strict=True):
                 self._deposit_cache[url] = (stamp, deposit)
             self._write_deposit_cache()
             results.extend(fetched)

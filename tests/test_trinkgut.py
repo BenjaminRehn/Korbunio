@@ -432,9 +432,9 @@ def test_trinkgut_number_of_parallel_requests_is_configurable(monkeypatch):
     real = concurrent.futures.ThreadPoolExecutor
 
     class Recording(real):
-        def __init__(self, max_workers=None, *a, **k):
+        def __init__(self, max_workers=None, *args, **kwargs):
             seen.append(max_workers)
-            super().__init__(max_workers=max_workers, *a, **k)
+            super().__init__(*args, max_workers=max_workers, **kwargs)
 
     monkeypatch.setattr(concurrent.futures, "ThreadPoolExecutor", Recording)
     source = OfficialTrinkgutSource(SimpleNamespace(), deposit_workers=2)
