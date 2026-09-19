@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "korbunio"
-version = "0.1.42"
+version = "0.1.43"
 description = "Korbuino: self-hosted comparison of regional supermarket offers in Germany."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,6 +20,8 @@ dependencies = [
   "beautifulsoup4>=4.12,<5",
   "uvicorn>=0.52,<1",
   "python-multipart>=0.0.20,<1",
+  # MCP-Server (/mcp), damit KI-Programme Angebote abfragen können. Ab 2.0 heißt FastMCP MCPServer.
+  "mcp>=2.2,<3",
   # Windows ships no IANA time zone database; zoneinfo needs this for Europe/Berlin.
   "tzdata>=2025.2; sys_platform == 'win32'",
 ]

@@ -210,6 +210,16 @@ Browser oder REST-Client
 
 Eine LLM kann davor oder dahinter eingesetzt werden, etwa für natürlichsprachliche Abfragen, Zusammenfassungen oder einen automatisierten Montagsbericht. Sie ist aber keine Runtime-Abhängigkeit. Dadurch bleibt der eigentliche Vergleich schnell und kann unabhängig von einem bestimmten Modell, Agenten oder Frontend betrieben werden.
 
+## MCP-Server für KI-Assistenten
+
+Der Server bringt unter `/mcp` (Streamable HTTP) einen MCP-Server mit. Ein KI-Assistent kann damit fragen „Wo ist Hochland Schmelzkäse im Angebot?“ und bekommt Händler, Preis ohne Bonusprogramm, Preis mit Bonusprogramm (wo die Daten einen Vorteil beziffern) und bis zu drei Bilder. Nur Lesen.
+
+- Werkzeuge: `find_offers`, `list_retailers`, `list_bonus_programs`.
+- Adresse in der MCP-Konfiguration des Clients: `https://<dein-server>/mcp`. Ist `SUPERMARKT_API_KEY` gesetzt, muss der Client `Authorization: Bearer <Schlüssel>` senden; sonst ist der Zugang offen wie der Rest des Servers.
+- Lokal ohne HTTP: `python -m supermarkt.mcp_server` (stdio).
+- Wartezeit: Eine neue Postleitzahl lädt alle Händler (meist 10 bis 20 Sekunden). Das Laden läuft im Hintergrund weiter, lange Abfragen melden Fortschritt, und nach 45 Sekunden (`SUPERMARKT_MCP_DEADLINE_SECONDS`) bittet der Server, gleich noch einmal zu fragen. Die Standard-Postleitzahl und zuletzt gefragte werden frisch gehalten.
+- Abschalten: `SUPERMARKT_MCP=0`.
+
 ## REST-API
 
 Für Automationen und externe Clients gibt es zusätzlich den Vergleichsendpunkt:

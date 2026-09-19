@@ -1,3 +1,18 @@
+# 0.1.43
+
+## MCP-Server für KI-Assistenten
+
+- Server: Unter `/mcp` läuft jetzt ein MCP-Server (nur Lesen). Ein KI-Assistent fragt
+  zum Beispiel „Wo ist Schmelzkäse im Angebot?“ und bekommt Händler, Preis ohne und,
+  wo die Daten einen Vorteil beziffern, mit Bonusprogramm sowie bis zu drei Bilder in
+  voller Auflösung. Werkzeuge: `find_offers`, `list_retailers`, `list_bonus_programs`.
+  Ein Schlüssel ist nur nötig, wenn `SUPERMARKT_API_KEY` gesetzt ist. Lokal geht auch
+  `python -m supermarkt.mcp_server`. Abschalten mit `SUPERMARKT_MCP=0`.
+- Wartezeit: Das Laden einer neuen Postleitzahl läuft im Hintergrund weiter, meldet
+  Fortschritt und führt nach 45 Sekunden zu einer freundlichen Bitte um erneutes Fragen
+  statt zu einem Zeitfehler. Die Standard-Postleitzahl wird frisch gehalten.
+- Neue Abhängigkeit: `mcp`.
+
 # 0.1.42
 
 ## Kaufland mit den Preisen der Region, schneller Scrollbalken, Händlerfilter

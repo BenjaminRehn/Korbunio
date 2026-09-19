@@ -60,11 +60,11 @@ def test_source_root_contains_only_the_package():
 
 
 def test_declared_runtime_dependencies_are_intentional_and_small():
-    assert _dependency_names() == {"fastapi", "pydantic", "curl-cffi", "beautifulsoup4", "uvicorn", "python-multipart", "tzdata", "certifi"}
+    assert _dependency_names() == {"fastapi", "pydantic", "curl-cffi", "beautifulsoup4", "uvicorn", "python-multipart", "tzdata", "certifi", "mcp"}
 
 
 def test_external_python_imports_match_declared_runtime_components():
-    assert _external_imports() == {"fastapi", "pydantic", "curl_cffi", "bs4", "certifi"}
+    assert _external_imports() == {"fastapi", "pydantic", "curl_cffi", "bs4", "certifi", "mcp", "starlette"}
 
 
 def test_docker_system_dependencies_are_actually_used():
@@ -115,7 +115,7 @@ def test_runtime_version_matches_package_metadata():
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert metadata["project"]["version"] == __version__
     assert USER_AGENT == f"korbunio/{__version__}"
-    assert __version__ == "0.1.42"
+    assert __version__ == "0.1.43"
 
 
 def test_default_host_port_is_configurable_without_changing_container_port():

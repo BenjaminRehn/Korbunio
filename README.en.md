@@ -191,6 +191,16 @@ Browser / script / REST client / LLM
 
 A local LLM can still use Korbuino, for example for an automatic Monday report through Conduit, natural-language queries, or summaries. The price comparison itself requires no LLM and remains independent of any model, agent, or frontend.
 
+## MCP server for AI assistants
+
+The server ships an MCP server at `/mcp` (Streamable HTTP). An assistant can ask "where is Hochland cream cheese on offer?" and gets the retailer, the price without a loyalty programme, the price with one (where the data quantifies a benefit) and up to three images. Read-only.
+
+- Tools: `find_offers`, `list_retailers`, `list_bonus_programs`.
+- Client configuration: `https://<your-server>/mcp`. If `SUPERMARKT_API_KEY` is set, the client must send `Authorization: Bearer <key>`; otherwise access is open like the rest of the server.
+- Locally without HTTP: `python -m supermarkt.mcp_server` (stdio).
+- Waiting: a new postal code loads every retailer (usually 10 to 20 seconds). Loading continues in the background, long calls report progress, and after 45 seconds (`SUPERMARKT_MCP_DEADLINE_SECONDS`) the server asks the client to repeat the question shortly. The default postal code and recently used ones are kept fresh.
+- Disable with `SUPERMARKT_MCP=0`.
+
 ## REST API
 
 External clients and automations use:
