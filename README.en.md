@@ -199,6 +199,7 @@ The server ships an MCP server at `/mcp` (Streamable HTTP). An assistant can ask
 - Client configuration: `https://<your-server>/mcp`. If `SUPERMARKT_API_KEY` is set, the client must send `Authorization: Bearer <key>`; otherwise access is open like the rest of the server.
 - Locally without HTTP: `python -m supermarkt.mcp_server` (stdio).
 - Waiting: a new postal code loads every retailer (usually 10 to 20 seconds). Loading continues in the background, long calls report progress, and after 45 seconds (`SUPERMARKT_MCP_DEADLINE_SECONDS`) the server asks the client to repeat the question shortly. The default postal code and recently used ones are kept fresh.
+- Shopping list (optional): if `SUPERMARKT_KITCHENOWL_URL` (https), `SUPERMARKT_KITCHENOWL_TOKEN` and `SUPERMARKT_KITCHENOWL_LIST_ID` are set, `add_to_shopping_list` is offered too. It puts an item with retailer and price as a note on the KitchenOwl list and skips duplicates. It is the only writing tool and exists only with a token; use a token that is good for this list only and keep the server on your own network.
 - Disable with `SUPERMARKT_MCP=0`.
 
 ## REST API

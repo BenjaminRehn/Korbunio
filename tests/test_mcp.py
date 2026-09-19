@@ -136,3 +136,82 @@ def test_http_endpoint_honours_optional_api_key(monkeypatch):
         monkeypatch.setenv("SUPERMARKT_API_KEY", "secret-for-test")
         assert client.post("/mcp", json=payload, headers=headers).status_code == 401
         assert client.post("/mcp", json=payload, headers={**headers, "Authorization": "Bearer secret-for-test"}).status_code == 200
+
+
+class _FakeKitchenOwl:
+    """Kleiner KitchenOwl-Ersatz auf localhost, der Anfragen mitschreibt."""
+
+    def __init__(self):
+        import json
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        outer = self
+        self.items: list[dict] = [{"id": 1, "name": "Milch"}]
+        self.requests: list[tuple] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def _reply(self, payload):
+                data = json.dumps(payload).encode()
+                self.send_response(200); self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
+
+            def do_GET(self):
+                outer.requests.append(("GET", self.path, self.headers.get("Authorization")))
+                self._reply(outer.items)
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                outer.requests.append(("POST", self.path, self.headers.get("Authorization"), body))
+                outer.items.append({"id": len(outer.items) + 1, **body})
+                self._reply({"id": len(outer.items)})
+
+            def log_message(self, *_args):
+                pass
+
+        self.server = HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_port}"
+
+    def close(self):
+        self.server.shutdown()
+
+
+@pytest.fixture
+def kitchenowl(monkeypatch):
+    fake = _FakeKitchenOwl()
+    monkeypatch.setenv("SUPERMARKT_KITCHENOWL_URL", fake.url)
+    monkeypatch.setenv("SUPERMARKT_KITCHENOWL_TOKEN", "test-token")
+    monkeypatch.setenv("SUPERMARKT_KITCHENOWL_LIST_ID", "7")
+    assert mcp_server.register_shopping_tool()
+    yield fake
+    fake.close()
+    monkeypatch.delenv("SUPERMARKT_KITCHENOWL_URL")
+    mcp_server.register_shopping_tool()
+
+
+def test_shopping_tool_is_hidden_without_kitchenowl(monkeypatch):
+    monkeypatch.delenv("SUPERMARKT_KITCHENOWL_URL", raising=False)
+    assert not mcp_server.register_shopping_tool()
+
+    async def names():
+        async with Client(mcp_server.mcp) as client:
+            return [tool.name for tool in (await client.list_tools()).tools]
+    assert "add_to_shopping_list" not in asyncio.run(names())
+
+
+def test_shopping_tool_adds_with_note_and_skips_duplicates(kitchenowl):
+    result = call("add_to_shopping_list", {"item": "Hochland Schmelzkäse", "retailer": "Kaufland", "price": "1,59 €"})
+    assert result.structured_content == {"item": "Hochland Schmelzkäse", "added": True, "note": "bei Kaufland · 1,59 €"}
+    post = [r for r in kitchenowl.requests if r[0] == "POST"][0]
+    assert post[1] == "/api/shoppinglist/7/add-item-by-name" and post[2] == "Bearer test-token"
+    assert post[3] == {"name": "Hochland Schmelzkäse", "description": "bei Kaufland · 1,59 €"}
+    again = call("add_to_shopping_list", {"item": "hochland schmelzkäse"})
+    assert again.structured_content["added"] is False and "schon" in again.content[0].text
+    assert len([r for r in kitchenowl.requests if r[0] == "POST"]) == 1
+
+
+def test_shopping_tool_refuses_plain_http_to_other_hosts(monkeypatch):
+    monkeypatch.setenv("SUPERMARKT_KITCHENOWL_URL", "http://kitchenowl.example.test")
+    monkeypatch.setenv("SUPERMARKT_KITCHENOWL_TOKEN", "t")
+    monkeypatch.setenv("SUPERMARKT_KITCHENOWL_LIST_ID", "1")
+    assert not mcp_server.register_shopping_tool()
+    monkeypatch.delenv("SUPERMARKT_KITCHENOWL_URL")

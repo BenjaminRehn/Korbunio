@@ -19,11 +19,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import json
 import logging
 import os
 import re
 import time
+import urllib.error
+import urllib.request
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
@@ -53,7 +57,9 @@ INSTRUCTIONS = (
     "es einen öffentlich ausgewiesenen Vorteil gibt, den Preis mit Bonusprogramm. Bei manchen Händlern "
     "(zum Beispiel EDEKA, Globus, PAYBACK, Rossmann, Müller) gibt es keinen berechenbaren Bonuspreis; das ist "
     "dann keine Aussage, dass es keinen Vorteil gibt. Preise gelten für die genannte Postleitzahl. Suche mit "
-    "dem Produktnamen und, wenn nötig, Synonymen in also_search; die Suche ist eine Textsuche."
+    "dem Produktnamen und, wenn nötig, Synonymen in also_search; die Suche ist eine Textsuche. Wenn es "
+    "das Werkzeug add_to_shopping_list gibt, setzt es einen Artikel auf die Einkaufsliste; frage vorher, ob das "
+    "gewünscht ist, und nimm Händler und Preis aus dem Fund mit."
 )
 
 
@@ -344,6 +350,86 @@ async def list_bonus_programs(postal_code: str = "", ctx: Context | None = None)
     ]
     text = "\n".join(f"- {p['name']} ({', '.join(p['retailers'])}): {p['offers_with_price']} Angebote mit Preis" for p in programs)
     return CallToolResult(content=[TextContent(type="text", text=text or "Keine Bonusprogramme.")], structured_content={"programs": programs})
+
+
+# ---- Einkaufsliste (optional, schreibend) ---------------------------------------------------
+#
+# Nur vorhanden, wenn der Betreiber KitchenOwl eingerichtet hat:
+#   SUPERMARKT_KITCHENOWL_URL, SUPERMARKT_KITCHENOWL_TOKEN, SUPERMARKT_KITCHENOWL_LIST_ID
+# Das Werkzeug legt nur Artikel an; es liest, ändert oder löscht nichts.
+
+
+def _kitchenowl_settings() -> tuple[str, str, str] | None:
+    url = os.environ.get("SUPERMARKT_KITCHENOWL_URL", "").strip().rstrip("/")
+    token = os.environ.get("SUPERMARKT_KITCHENOWL_TOKEN", "").strip()
+    list_id = os.environ.get("SUPERMARKT_KITCHENOWL_LIST_ID", "").strip()
+    if not (url and token and list_id.isdigit()):
+        return None
+    parts = urlsplit(url)
+    local = parts.hostname in {"localhost", "127.0.0.1", "::1"}
+    if parts.scheme != "https" and not (parts.scheme == "http" and local):
+        log.warning("SUPERMARKT_KITCHENOWL_URL muss https sein; Einkaufslisten-Werkzeug bleibt aus.")
+        return None
+    return url, token, list_id
+
+
+def _kitchenowl_call(path: str, body: dict[str, Any] | None = None) -> Any:
+    url, token, _list_id = _kitchenowl_settings() or ("", "", "")
+    if not url:
+        raise ValueError("KitchenOwl ist auf diesem Server nicht eingerichtet.")
+    request = urllib.request.Request(url + path, method="POST" if body is not None else "GET", headers={
+        "Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json",
+    }, data=json.dumps(body).encode() if body is not None else None)
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 - Adresse vom Betreiber
+            return json.loads(response.read().decode() or "null")
+    except urllib.error.HTTPError as exc:
+        raise ValueError(f"KitchenOwl antwortete mit HTTP {exc.code}.") from exc
+    except (urllib.error.URLError, OSError) as exc:
+        raise ValueError("KitchenOwl ist gerade nicht erreichbar.") from exc
+
+
+def _add_to_kitchenowl(name: str, description: str) -> bool:
+    """True, wenn neu angelegt; False, wenn der Artikel schon auf der Liste steht."""
+    _url, _token, list_id = _kitchenowl_settings() or ("", "", "")
+    existing = _kitchenowl_call(f"/api/shoppinglist/{list_id}/items") or []
+    known = {str(item.get("name", "")).strip().casefold() for item in existing if isinstance(item, dict)}
+    if name.casefold() in known:
+        return False
+    _kitchenowl_call(f"/api/shoppinglist/{list_id}/add-item-by-name", {"name": name, **({"description": description} if description else {})})
+    return True
+
+
+async def add_to_shopping_list(item: str, retailer: str = "", price: str = "", note: str = "") -> CallToolResult:
+    """Setzt einen Artikel auf die Einkaufsliste (KitchenOwl). Legt nur an, ändert und löscht nichts.
+
+    Args:
+        item: Artikelname, z. B. "Hochland Schmelzkäse".
+        retailer: Händler, bei dem er im Angebot ist (kommt in die Notiz), z. B. "Kaufland".
+        price: Preis, der in die Notiz kommt, z. B. "1,59 €".
+        note: Weitere Notiz.
+    """
+    name = " ".join(item.split())[:120]
+    if not name:
+        raise ValueError("Bitte sage, welcher Artikel auf die Liste soll.")
+    parts = [f"bei {' '.join(retailer.split())[:40]}" if retailer.strip() else "", " ".join(price.split())[:20], " ".join(note.split())[:120]]
+    description = " · ".join(part for part in parts if part)
+    added = await asyncio.to_thread(_add_to_kitchenowl, name, description)
+    text = f"„{name}“ steht jetzt auf der Einkaufsliste." if added else f"„{name}“ stand schon auf der Einkaufsliste."
+    return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"item": name, "added": added, "note": description})
+
+
+def register_shopping_tool() -> bool:
+    """Meldet das Einkaufslisten-Werkzeug an, wenn KitchenOwl eingerichtet ist; sonst bleibt es unsichtbar."""
+    with contextlib.suppress(Exception):
+        mcp.remove_tool("add_to_shopping_list")
+    if _kitchenowl_settings() is None:
+        return False
+    mcp.add_tool(add_to_shopping_list, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True))
+    return True
+
+
+register_shopping_tool()
 
 
 def main() -> None:  # pragma: no cover - Einstieg für stdio

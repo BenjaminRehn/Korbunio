@@ -7,6 +7,10 @@
   (`max_images` 0 bis 3), damit die Antwort den Kontext des Assistenten nicht füllt.
   Neue Postleitzahlen sind auf 10 je 10 Minuten begrenzt
   (`SUPERMARKT_MCP_NEW_POSTAL_CODES_PER_10MIN`).
+- MCP: Neues, optionales Werkzeug `add_to_shopping_list`. Ein Assistent kann einen Fund
+  („Schmelzkäse bei Kaufland, 1,59 €“) auf die KitchenOwl-Einkaufsliste setzen. Es gibt
+  das Werkzeug nur, wenn `SUPERMARKT_KITCHENOWL_URL`, `..._TOKEN` und `..._LIST_ID`
+  gesetzt sind; es legt nur an und überspringt Artikel, die schon auf der Liste stehen.
 - Kaufland: Die Gültigkeit steht im deutschen Format (17.09.2026 bis 23.09.2026) statt
   als ISO-Datum, in der Ergebnisliste und im MCP.
 - Native App: Der KitchenOwl-Abgleich entfernt Artikel wieder, die aus der Korbuino-Liste
