@@ -38,6 +38,22 @@ class ShoppingListText {
     return parts.join(' · ');
   }
 
+  /// The offer's details without product name and retailer: pack, price and
+  /// deposit. For views that show product and retailer separately.
+  static String detailsFor(Offer offer) {
+    final price = offer.effectivePriceText.isNotEmpty
+        ? offer.effectivePriceText
+        : offer.regularPriceText;
+    return [
+      if (offer.pack.isNotEmpty) offer.pack,
+      if (price.isNotEmpty) price,
+      if (offer.depositNote.isNotEmpty)
+        offer.depositNote
+      else if (offer.depositText.isNotEmpty)
+        '${offer.depositText} Pfand',
+    ].join(' · ');
+  }
+
   static String textFor(List<Offer> offers) => offers.map(lineFor).join('\n');
 
   /// Puts the collection on the clipboard.

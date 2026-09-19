@@ -79,6 +79,14 @@ class KitchenOwlClient {
             .timeout(_timeout),
       );
 
+  Future<dynamic> _delete(String path, Map<String, Object?> payload) async {
+    final request = http.Request('DELETE', _uri(path))
+      ..headers.addAll(_headers)
+      ..body = jsonEncode(payload);
+    final streamed = await _http.send(request).timeout(_timeout);
+    return _decode(await http.Response.fromStream(streamed));
+  }
+
   Future<T> _call<T>(Future<T> Function() action) async {
     _requireSecure();
     try {
@@ -216,6 +224,29 @@ class KitchenOwlClient {
         }
       }
       return article;
+    });
+  }
+
+  /// Takes an article off the list again.
+  ///
+  /// Returns whether an entry was found and removed; false means it was
+  /// already gone, for instance checked off in KitchenOwl in the meantime.
+  Future<bool> removeArticle(String listId, String article) async {
+    if (!RegExp(r'^\d+$').hasMatch(listId)) {
+      throw KitchenOwlException('Ungültige KitchenOwl-Listen-ID.');
+    }
+    return _call(() async {
+      for (final entry in _entries(
+        await _get('/api/shoppinglist/$listId/items'),
+      )) {
+        final item = entry['item'] is Map ? entry['item'] as Map : const {};
+        final name = _name(entry).isNotEmpty ? _name(entry) : _name(item);
+        final id = entry['id'] ?? item['id'];
+        if (name != article || id is! int) continue;
+        await _delete('/api/shoppinglist/$listId/item', {'item_id': id});
+        return true;
+      }
+      return false;
     });
   }
 

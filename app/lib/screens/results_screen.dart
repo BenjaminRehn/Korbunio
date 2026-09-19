@@ -76,6 +76,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   /// Offers filed in this session: offer key to article name.
   final _filed = <String, String>{};
+
+  /// Keys of the offers currently on the local list, so a row can offer
+  /// "remove" instead of adding it a second time.
+  final _onLocalList = <String>{};
   final _sending = <String>{};
   String _listId = '';
   ShoppingListInfo _shoppingList = ShoppingListInfo.disabled;
@@ -108,6 +112,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
     _scroll.addListener(_onScroll);
     _reload();
     _loadShoppingList();
+    _loadLocalListKeys();
     if (widget.autoRefresh) _startFreshSearch();
   }
 
@@ -390,12 +395,34 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   // -------------------------------------------------------- Einkaufsliste
 
-  /// Adds one offer to the app's local shopping list.
+  Future<void> _loadLocalListKeys() async {
+    final offers = await widget.localShoppingList.load();
+    if (!mounted) return;
+    setState(() {
+      _onLocalList
+        ..clear()
+        ..addAll(offers.map((offer) => offer.key));
+    });
+  }
+
+  /// Adds one offer to the app's local shopping list, or takes it off again
+  /// when it is already there.
   Future<void> _addToList(Offer offer) async {
     setState(() => _sending.add(offer.key));
     try {
-      await widget.localShoppingList.add(offer);
-      if (mounted) _toast('Zur lokalen Einkaufsliste hinzugefügt.');
+      if (_onLocalList.contains(offer.key)) {
+        await widget.localShoppingList.remove(offer.key);
+        if (mounted) {
+          setState(() => _onLocalList.remove(offer.key));
+          _toast('Von der lokalen Einkaufsliste entfernt.');
+        }
+      } else {
+        await widget.localShoppingList.add(offer);
+        if (mounted) {
+          setState(() => _onLocalList.add(offer.key));
+          _toast('Zur lokalen Einkaufsliste hinzugefügt.');
+        }
+      }
     } on Object catch (exception) {
       _toast('$exception');
     } finally {
@@ -442,6 +469,30 @@ class _ResultsScreenState extends State<ResultsScreen> {
           ? exception.message
           : '$exception';
       _toast(message);
+    } finally {
+      if (mounted) setState(() => _sending.remove(offer.key));
+    }
+  }
+
+  /// Takes an offer off the KitchenOwl list again. Only possible with the
+  /// app's own KitchenOwl connection; through the server the offer stays
+  /// filed until it is checked off in KitchenOwl.
+  Future<void> _removeFromKitchenOwl(Offer offer) async {
+    final direct = _directKitchenOwl;
+    final article = _filed[offer.key];
+    if (direct == null || article == null || _listId.isEmpty) return;
+    setState(() => _sending.add(offer.key));
+    try {
+      final removed = await direct.removeArticle(_listId, article);
+      if (!mounted) return;
+      setState(() => _filed.remove(offer.key));
+      _toast(
+        removed
+            ? '„$article“ von der KitchenOwl-Liste entfernt.'
+            : '„$article“ war schon nicht mehr auf der Liste.',
+      );
+    } on KitchenOwlException catch (exception) {
+      _toast(exception.message);
     } finally {
       if (mounted) setState(() => _sending.remove(offer.key));
     }
@@ -653,7 +704,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
               ),
             ),
           if (_localListShown)
-            LocalShoppingListButton(store: widget.localShoppingList),
+            LocalShoppingListButton(
+              store: widget.localShoppingList,
+              onClosed: _loadLocalListKeys,
+            ),
           IconButton(
             tooltip: _offline
                 ? 'Gespeicherte Ergebnisse neu lesen'
@@ -901,8 +955,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
           // KitchenOwl state; it only disappears when the user asked for
           // KitchenOwl alone.
           onAddToList: _localListShown ? () => _addToList(offer) : null,
+          onLocalList: _onLocalList.contains(offer.key),
           onAddToKitchenOwl: _kitchenOwlAvailable
               ? () => _addToKitchenOwl(offer)
+              : null,
+          onRemoveFromKitchenOwl: _directKitchenOwl != null
+              ? () => _removeFromKitchenOwl(offer)
               : null,
           onOpenSource: () => launchUrl(
             Uri.parse(offer.sourceUrl),
