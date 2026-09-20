@@ -125,8 +125,10 @@ def add_watch(query: str, max_cents: int | None, postal_code: str) -> dict[str, 
 
 def list_watches(postal_code: str | None = None) -> list[dict[str, Any]]:
     with _LOCK, _connect() as db:
-        rows = db.execute("SELECT id, query, max_cents, plz FROM watches" + (" WHERE plz = ?" if postal_code else "") + " ORDER BY id",
-                          (postal_code,) if postal_code else ()).fetchall()
+        if postal_code:
+            rows = db.execute("SELECT id, query, max_cents, plz FROM watches WHERE plz = ? ORDER BY id", (postal_code,)).fetchall()
+        else:
+            rows = db.execute("SELECT id, query, max_cents, plz FROM watches ORDER BY id").fetchall()
     return [{"id": i, "query": q, "max_cents": m, "postal_code": p} for i, q, m, p in rows]
 
 

@@ -22,7 +22,8 @@ def _post(url: str, body: bytes) -> tuple[str, bytes]:
     if key := os.environ.get("KORBUINO_MCP_KEY", "").strip():
         headers["Authorization"] = f"Bearer {key}"
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310 - Adresse gibt der Nutzer an
+    # Nur http(s): main() prüft die Adresse.
+    with urllib.request.urlopen(request, timeout=120) as response:  # nosec B310
         return response.headers.get("Content-Type", ""), response.read()
 
 
