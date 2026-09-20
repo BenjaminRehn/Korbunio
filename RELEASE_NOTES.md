@@ -11,9 +11,15 @@
   („Schmelzkäse bei Kaufland, 1,59 €“) auf die KitchenOwl-Einkaufsliste setzen. Es gibt
   das Werkzeug nur, wenn KitchenOwl eingerichtet ist, und es legt nur an (Artikel, die
   schon auf der Liste stehen, werden übersprungen).
+- MCP: `price_history` (der Server schreibt jetzt den Tagespreis je Händler und Artikel
+  mit), `watch_product`/`list_watches`/`remove_watch` (Bescheid per ntfy oder Webhook,
+  sobald ein Produkt im Angebot ist, optional unter einem Höchstpreis; jeder Treffer nur
+  einmal), `check_shopping_list` (was von der KitchenOwl-Liste ist im Angebot),
+  Stundenlimit für das Anlegen von Artikeln, Stdio-Adapter `supermarkt.mcp_bridge`.
 - Neue Seite `/settings`: KitchenOwl-Adresse und Token eintragen, Liste wählen. Der Token
   liegt nur auf dem Server (Datei mit Rechten 0600) und wird nie wieder angezeigt; mit
   gesetztem Admin-Schlüssel verlangt die Seite ihn. Umgebungsvariablen gehen weiterhin.
+  Dort stehen auch die Benachrichtigungsadresse und Einrichtungszeilen für den MCP.
 - Kaufland: Die Gültigkeit steht im deutschen Format (17.09.2026 bis 23.09.2026) statt
   als ISO-Datum, in der Ergebnisliste und im MCP.
 - Native App: Der KitchenOwl-Abgleich entfernt Artikel wieder, die aus der Korbuino-Liste

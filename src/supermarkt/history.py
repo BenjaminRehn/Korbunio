@@ -57,7 +57,8 @@ def record(postal_code: str, snapshot: dict[str, Any]) -> None:
         for item in snapshot.get("offers", []):
             if not isinstance(item, dict) or item.get("price") is None:
                 continue
-            name = " ".join(f"{item.get('brand', '')} {item.get('name', '')}".split())
+            brand, base = str(item.get("brand", "")).strip(), str(item.get("name", "")).strip()
+            name = " ".join((base if not brand or brand.casefold() in base.casefold() else f"{brand} {base}").split())
             if not name:
                 continue
             key = str(item.get("match_key") or item.get("offer_id") or name)

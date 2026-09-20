@@ -326,7 +326,7 @@ def receiver(monkeypatch):
 
 def _snapshot(price_a=1.99):
     return {"offers": [
-        {"offer_id": "a", "retailer": "Kaufland", "brand": "Hochland", "name": "Schmelzkäse", "price": price_a, "match_key": "k1"},
+        {"offer_id": "a", "retailer": "Kaufland", "brand": "Hochland", "name": "Hochland Schmelzkäse", "price": price_a, "match_key": "k1"},
         {"offer_id": "b", "retailer": "REWE", "brand": "", "name": "Schmelzkäse", "price": 1.49, "match_key": "k2"},
         {"offer_id": "c", "retailer": "REWE", "brand": "", "name": "Ohne Preis", "price": None, "match_key": "k3"},
     ]}
@@ -340,7 +340,9 @@ def test_price_history_keeps_the_lowest_price_per_day_and_answers_through_the_to
     rows = history.price_history("schmelzkäse hochland", "01067")
     assert len(rows) == 1 and rows[0]["lowest_cents"] == 159 and rows[0]["days_seen"] == 1
     result = call("price_history", {"product": "Schmelzkäse", "postal_code": "01067"})
-    assert "Kaufland" in result.content[0].text and "1,59 €" in result.content[0].text
+    text = result.content[0].text
+    assert "Kaufland: Hochland Schmelzkäse" in text and "Hochland Hochland" not in text and "1,59 €" in text
+    assert "gesehen seit " + ".".join(reversed(rows[0]["first_seen"].split("-"))) in text
     assert "noch keine Preise" in call("price_history", {"product": "Kaviar", "postal_code": "01067"}).content[0].text
 
 

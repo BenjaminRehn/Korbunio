@@ -200,6 +200,10 @@ The server ships an MCP server at `/mcp` (Streamable HTTP). An assistant can ask
 - Locally without HTTP: `python -m supermarkt.mcp_server` (stdio).
 - Waiting: a new postal code loads every retailer (usually 10 to 20 seconds). Loading continues in the background, long calls report progress, and after 45 seconds (`SUPERMARKT_MCP_DEADLINE_SECONDS`) the server asks the client to repeat the question shortly. The default postal code and recently used ones are kept fresh.
 - Shopping list (optional): once KitchenOwl is set up, `add_to_shopping_list` is offered too. Set it up on the `/settings` page (address, token, pick a list); the token stays on the server in the data folder (`kitchenowl.json`, mode 0600) and is never shown again. With `SUPERMARKT_API_KEY` set, the page asks for the admin key. `SUPERMARKT_KITCHENOWL_URL`, `..._TOKEN` and `..._LIST_ID` work as an alternative. It puts an item with retailer and price as a note on the KitchenOwl list and skips duplicates. It is the only writing tool and exists only with a token; use a token that is good for this list only and keep the server on your own network.
+- Price history: on every fresh load the server records the lowest daily price per retailer and product (SQLite `price-history.sqlite3` in the data folder, one year). `price_history` shows whether an offer is really cheap. History starts with this version.
+- Watching: `watch_product`, `list_watches`, `remove_watch` (up to 20). The server checks in the background every 25 minutes and reports each new match once, optionally only below a maximum price. Messages go to an address entered on `/settings` (an ntfy topic or a webhook, via POST); without it these tools do not exist.
+- `check_shopping_list` shows which items on the KitchenOwl list are on offer now. `add_to_shopping_list` is limited to 20 new items per hour (`SUPERMARKT_MCP_SHOPPING_ADDS_PER_HOUR`).
+- Clients that only speak stdio: `python -m supermarkt.mcp_bridge https://your-server/mcp` (key in `KORBUINO_MCP_KEY`). Ready-made setup lines are on `/settings`.
 - Disable with `SUPERMARKT_MCP=0`.
 
 ## REST API

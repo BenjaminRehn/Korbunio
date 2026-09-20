@@ -498,9 +498,12 @@ async def price_history(product: str, postal_code: str = "", days: int = 90) -> 
         return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"postal_code": plz, "history": []})
     def euro(cents: int) -> str:
         return f"{cents / 100:.2f}".replace(".", ",") + " €"
+
+    def german(day: str) -> str:
+        return ".".join(reversed(day.split("-")))
     lines = [
-        f"- {r['retailer']}: {r['product']} – zuletzt {euro(r['last_cents'])} ({r['last_seen']}), "
-        f"niedrigster {euro(r['lowest_cents'])}, höchster {euro(r['highest_cents'])}, an {r['days_seen']} Tag(en) gesehen seit {r['first_seen']}"
+        f"- {r['retailer']}: {r['product']} – zuletzt {euro(r['last_cents'])} ({german(r['last_seen'])}), "
+        f"niedrigster {euro(r['lowest_cents'])}, höchster {euro(r['highest_cents'])}, an {r['days_seen']} Tag(en) gesehen seit {german(r['first_seen'])}"
         for r in rows
     ]
     return CallToolResult(content=[TextContent(type="text", text=f"Preisverlauf (PLZ {plz}):\n" + "\n".join(lines))],
