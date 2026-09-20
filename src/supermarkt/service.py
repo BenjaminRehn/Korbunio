@@ -70,7 +70,7 @@ class SourceLoader:
         self.netto_marken_markets = NettoMarkenMarketResolver(http)
         self.official_rossmann = OfficialRossmannSource(timeout_seconds=TIMEOUT_SECONDS)
         self.official_mueller = OfficialMuellerSource(http)
-        self.kaufda_mueller = KaufdaRetailerSource(http, "Müller", "Müller", "Mueller")
+        self.kaufda_mueller = KaufdaRetailerSource(http, "Müller", "Müller", "Mueller", use_viewer=True)
         self.official_dm = OfficialDmSource(http)
         self.official_marktkauf = OfficialMarktkaufSource(TIMEOUT_SECONDS)
         self.official_kaufland = OfficialKauflandSource(

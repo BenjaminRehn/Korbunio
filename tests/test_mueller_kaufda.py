@@ -112,3 +112,59 @@ def test_mueller_without_kaufda_offers_still_asks_marktguru(monkeypatch):
 
     assert result["source_states"]["Müller"] == "Marktguru-Fallback"
     assert any("Müller KaufDA" in error for error in result["request_errors"])
+
+
+def _viewer_offer(identifier, name, deals, *, brand="", start="2026-09-13T22:00:00.000+0000", end="2026-09-20T21:59:59.000+0000"):
+    return {"content": {
+        "id": identifier, "type": "offer", "image": "https://content-media.bonial.biz/x/main.jpg",
+        "products": [{"name": name, "brandName": brand, "description": [{"paragraph": "versch. Sorten, 175 g"}]}],
+        "deals": deals, "publicationProfiles": [{"validity": {"startDate": start, "endDate": end}}],
+    }}
+
+
+def _deal(kind, price, condition=None):
+    return {"type": kind, "min": price, "max": price, "conditions": [{"other": condition}] if condition else []}
+
+
+def test_viewer_uses_the_price_without_app_and_notes_the_app_price():
+    data = {"contents": [{"number": 1, "offers": [
+        _viewer_offer("a", "Balla Stixx", [_deal("SPECIAL_PRICE", 1.29, "mit der Müller App"), _deal("SALES_PRICE", 1.65, "Ohne App")], brand="HARIBO"),
+        _viewer_offer("b", "Zahnbürste", [_deal("SALES_PRICE", 3.99)]),
+        _viewer_offer("c", "Nur App-Preis", [_deal("SPECIAL_PRICE", 0.99, "mit der Müller App")]),
+        _viewer_offer("d", "Abgelaufen", [_deal("SALES_PRICE", 2.0)], end="2026-09-01T00:00:00.000+0000"),
+        _viewer_offer("a", "Doppelt", [_deal("SALES_PRICE", 9.0)]),
+    ]}]}
+    offers = _source().parse_viewer(data, "1", date(2026, 9, 17))
+    assert [(o.name, o.price) for o in offers] == [("HARIBO Balla Stixx", 1.65), ("Zahnbürste", 3.99)]
+    assert "mit der Müller App 1,29 €" in offers[0].description and offers[1].image_url.startswith("https://content-media.bonial.biz/")
+    assert offers[0].valid_until == "2026-09-20"
+
+
+def test_viewer_rejects_an_unexpected_answer():
+    try:
+        _source().parse_viewer({"nope": []}, "1")
+    except ToolError:
+        return
+    raise AssertionError("ToolError erwartet")
+
+
+def test_load_prefers_the_whole_brochure_and_falls_back_to_the_page(monkeypatch):
+    page = _page([_item("Seitenangebot", 1.0)]).replace(
+        "</script>", "</script>", 1)
+    data = json.loads(page.split('type="application/json">')[1].split("</script>")[0])
+    data["props"]["pageProps"]["pageInformation"]["brochures"] = {"viewer": [{"id": 2501262877, "publisher": {"id": "DE-1030", "name": "Müller"}}]}
+    page = f'<html><script id="__NEXT_DATA__" type="application/json">{json.dumps(data)}</script></html>'
+    viewer = json.dumps({"contents": [{"offers": [_viewer_offer("a", "Prospektangebot", [_deal("SALES_PRICE", 2.5)])]}]})
+    requested = []
+
+    class Http:
+        def get_bytes(self, url, headers=None):
+            requested.append(url)
+            if "content-viewer-be" in url:
+                return viewer.encode()
+            return page.encode()
+    source = KaufdaRetailerSource(Http(), "Müller", "Müller", "Mueller", use_viewer=True)
+    assert [o.name for o in source.load(date(2026, 9, 17))] == ["Prospektangebot"]
+    assert any("/brochures/2501262877/pages?partner=kaufda_web" in url for url in requested)
+    viewer = "kaputt"
+    assert [o.name for o in source.load(date(2026, 9, 17))] == ["Seitenangebot"]

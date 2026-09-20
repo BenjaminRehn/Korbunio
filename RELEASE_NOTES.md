@@ -1,3 +1,14 @@
+# 0.1.46
+
+## Müller: das ganze Prospekt statt eines Ausschnitts
+
+- Server: Müllers eigene Seite bleibt hinter der Browserprüfung, aber KaufDA zeigt das
+  komplette Wochenprospekt in seinem öffentlichen Prospekt-Viewer. Der Server liest jetzt
+  daraus, statt nur die Hervorhebungen der KaufDA-Händlerseite zu nehmen: 39 statt 9
+  gültige Angebote in der Stichprobe. Als Preis gilt der Preis ohne App; einen günstigeren
+  App-Preis nennt die Beschreibung („mit der Müller App 1,29 €“). Ist der Viewer nicht
+  erreichbar oder ändert er sein Format, fällt der Server auf die bisherige Seite zurück.
+
 # 0.1.45
 
 ## Bessere MCP-Suche, Quellenstatus, Hinweise

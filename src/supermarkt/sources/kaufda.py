@@ -108,6 +108,25 @@ def _local_date(value: Any) -> Optional[date]:
         return None
 
 
+
+def _viewer_prices(deals: Any) -> tuple[Optional[float], Optional[float]]:
+    """(regulärer Preis, App-Preis) aus den Preisangaben eines Prospektangebots."""
+    regular = app = None
+    for deal in deals if isinstance(deals, list) else []:
+        if not isinstance(deal, dict):
+            continue
+        price = parse_number(deal.get("min"))
+        if price is None or price <= 0:
+            continue
+        conditions = " ".join(clean_text(value) for c in deal.get("conditions", []) if isinstance(c, dict) for value in c.values()).casefold()
+        kind = clean_text(deal.get("type")).upper()
+        if kind == "SPECIAL_PRICE" and "app" in conditions and "ohne" not in conditions:
+            app = price if app is None else min(app, price)
+        elif kind in {"SALES_PRICE", "SPECIAL_PRICE"} and ("app" not in conditions or "ohne app" in conditions):
+            regular = price if regular is None else min(regular, price)
+    return regular, app
+
+
 class KaufdaRetailerSource:
     """KaufDA's public offer page of one retailer.
 
@@ -118,13 +137,18 @@ class KaufdaRetailerSource:
     """
 
     BASE = "https://www.kaufda.de/Geschaefte/{slug}"
+    VIEWER_API = "https://content-viewer-be.kaufda.de/v1/brochures/{brochure}/pages"
+    # Das Prospekt ist bundesweit gleich; der Viewer verlangt nur irgendeinen Ort (hier die Mitte Deutschlands).
+    VIEWER_QUERY = {"partner": "kaufda_web", "lat": "51.16", "lng": "10.45"}
     MAX_RESPONSE = 3_000_000
+    MAX_VIEWER_RESPONSE = 6_000_000
 
-    def __init__(self, http: HttpClient, retailer: str, publisher_name: str, slug: str) -> None:
+    def __init__(self, http: HttpClient, retailer: str, publisher_name: str, slug: str, use_viewer: bool = False) -> None:
         self.http = http
         self.retailer = retailer
         self.publisher_name = publisher_name
         self.slug = slug
+        self.use_viewer = use_viewer
 
     @property
     def url(self) -> str:
@@ -134,7 +158,91 @@ class KaufdaRetailerSource:
         payload = self.http.get_bytes(self.url, {"Accept": "text/html", "Accept-Language": "de-DE,de;q=0.9"})
         if len(payload) > self.MAX_RESPONSE:
             raise ToolError(f"KaufDA-{self.retailer}-Seite überschreitet das Größenlimit")
-        return self.parse(payload.decode("utf-8", errors="replace"), target)
+        text = payload.decode("utf-8", errors="replace")
+        if self.use_viewer:
+            # Das ganze Prospekt (deutlich mehr als die Hervorhebungen der Händlerseite); ein Fehler fällt auf die Seite zurück.
+            try:
+                viewer = self._viewer_offers(text, target)
+            except (ToolError, ValueError, KeyError, TypeError):
+                viewer = []
+            if viewer:
+                return viewer
+        return self.parse(text, target)
+
+    def _brochure_ids(self, page: str) -> list[str]:
+        match = re.search(r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>', page, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            return []
+        try:
+            brochures = json.loads(html.unescape(match.group(1)))["props"]["pageProps"]["pageInformation"]["brochures"]["viewer"]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            return []
+        ids = []
+        for entry in brochures if isinstance(brochures, list) else []:
+            publisher = entry.get("publisher") if isinstance(entry, dict) and isinstance(entry.get("publisher"), dict) else {}
+            name = clean_text(publisher.get("name"))
+            if isinstance(entry, dict) and re.fullmatch(r"\d{6,12}", str(entry.get("id", ""))) and (not name or name.casefold() == self.publisher_name.casefold()):
+                ids.append(str(entry["id"]))
+        return ids[:2]
+
+    def _viewer_offers(self, page: str, target: Optional[date]) -> list[Offer]:
+        offers: list[Offer] = []
+        for brochure in self._brochure_ids(page):
+            url = self.VIEWER_API.format(brochure=brochure) + "?" + "&".join(f"{k}={v}" for k, v in self.VIEWER_QUERY.items())
+            payload = self.http.get_bytes(url, {"Accept": "application/json"})
+            if len(payload) > self.MAX_VIEWER_RESPONSE:
+                raise ToolError(f"KaufDA-Prospekt von {self.retailer} überschreitet das Größenlimit")
+            offers.extend(self.parse_viewer(json.loads(payload.decode("utf-8", errors="replace")), brochure, target))
+        return offers
+
+    def parse_viewer(self, data: dict[str, Any], brochure: str, target: Optional[date] = None) -> list[Offer]:
+        """Angebote aus den Seiten des Prospekts. Regulärer Preis = Preis „ohne App“; ein App-Preis steht nur in der Beschreibung."""
+        pages = data.get("contents") if isinstance(data, dict) else None
+        if not isinstance(pages, list):
+            raise ToolError(f"KaufDA-Prospekt von {self.retailer} hat ein unerwartetes Format")
+        result: list[Offer] = []
+        seen: set[str] = set()
+        for page in pages:
+            for entry in page.get("offers", []) if isinstance(page, dict) else []:
+                content = entry.get("content") if isinstance(entry, dict) else None
+                if not isinstance(content, dict) or content.get("type") != "offer" or not content.get("products"):
+                    continue
+                identifier = clean_text(content.get("id"))
+                if not identifier or identifier in seen:
+                    continue
+                profile = (content.get("publicationProfiles") or [{}])[0].get("validity", {})
+                start, end = _local_date(profile.get("startDate")), _local_date(profile.get("endDate"))
+                if target is not None and ((start and target < start) or (end and target > end)):
+                    continue
+                regular, app = _viewer_prices(content.get("deals"))
+                product = content["products"][0]
+                title = clean_text(product.get("name"))
+                if not title or regular is None or regular <= 0:
+                    continue
+                seen.add(identifier)
+                brand = clean_brand(product.get("brandName"))
+                name = title if not brand or brand.casefold() in title.casefold() else f"{brand} {title}"
+                description = clean_text(" ".join(clean_text(d.get("paragraph")) for d in product.get("description", []) if isinstance(d, dict)))
+                if app is not None and app < regular:
+                    description = clean_text(f"{description} · mit der Müller App {format(app, '.2f').replace('.', ',')} €")
+                pack = normalize_pack(f"{name} {description}")
+                image_url = normalize_image_url(content.get("image"))
+                if image_url and (is_rejected_image_url(image_url) or urlsplit(image_url).hostname != "content-media.bonial.biz"):
+                    image_url = ""
+                decision = category_decision("", self.retailer, name, description, brand)
+                result.append(Offer(
+                    offer_id=f"kaufda-{self.slug.casefold()}:{identifier}", retailer=self.retailer, category=decision.category,
+                    name=name, brand=brand, description=description, price=regular,
+                    base_price=None, base_unit="", pack_signature=pack,
+                    validity_label=format_validity(start, end),
+                    match_key=build_match_key(brand, title, pack, identifier), source_url=self.url,
+                    image_url=image_url, source_category=decision.source_category,
+                    detected_category=decision.detected_category, category_conflict=decision.category_conflict,
+                    valid_from=start.isoformat() if start else None,
+                    valid_until=end.isoformat() if end else None,
+                    coverage_note="Angebote aus dem Prospekt über KaufDA; die Müller-Seite selbst war nicht lesbar.",
+                ))
+        return result
 
     def parse(self, page: str, target: Optional[date] = None) -> list[Offer]:
         match = re.search(
