@@ -108,6 +108,18 @@ def price_history(query: str, postal_code: str, days: int = 180) -> list[dict[st
     return result[:20]
 
 
+def retailer_status() -> list[dict[str, Any]]:
+    """Wann wurde je Händler zuletzt etwas gesehen, und wie viele Angebote an diesem Tag? (alle Postleitzahlen)"""
+    with _LOCK, _connect() as db:
+        rows = db.execute(
+            "SELECT p.retailer, p.day, COUNT(DISTINCT p.key) FROM prices p JOIN "
+            "(SELECT retailer, MAX(day) AS day FROM prices GROUP BY retailer) m ON m.retailer = p.retailer AND m.day = p.day "
+            "GROUP BY p.retailer, p.day ORDER BY p.retailer"
+        ).fetchall()
+    today = date.fromisoformat(_today())
+    return [{"retailer": r, "last_day": d, "offers": n, "days_ago": (today - date.fromisoformat(d)).days} for r, d, n in rows]
+
+
 # ---- Beobachtungen ------------------------------------------------------------------------
 
 

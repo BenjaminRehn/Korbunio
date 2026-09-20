@@ -1,3 +1,16 @@
+# 0.1.45
+
+## Bessere MCP-Suche, Quellenstatus, Hinweise
+
+- MCP: `find_offers` kennt gängige Alltagswörter mit anderem Prospektnamen (Osterhase →
+  Schokohase, Klopapier → Toilettenpapier, Brötchen → Semmel …). Die Liste ist klein und
+  von Hand gepflegt.
+- MCP: Bei Händlern ohne berechenbaren Bonuspreis (EDEKA, Globus, Rossmann, Müller)
+  steht ein kurzer Hinweis in der Antwort.
+- `/settings` zeigt eine Tabelle, wann der Server je Händler zuletzt Angebote gesehen hat
+  (JSON: `/health/sources`). Steht seit Tagen dasselbe Datum, liefert die Quelle nichts Neues.
+- README: Hinweise zu Sicherung des Datenordners und zum API-Schlüssel.
+
 # 0.1.44
 
 ## MCP-Feinschliff, Kaufland-Datum, Deploy-Skript

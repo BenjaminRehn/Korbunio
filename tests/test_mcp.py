@@ -429,3 +429,35 @@ def test_stdio_bridge_forwards_json_and_event_streams():
     error = json.loads(mcp_bridge.forward("https://x/mcp", '{"jsonrpc": "2.0", "id": 5, "method": "tools/list"}', refuse)[0])
     assert error["id"] == 5 and "401" in error["error"]["message"]
     assert mcp_bridge.forward("https://x/mcp", '{"method": "notifications/initialized"}', refuse) == []
+
+
+def test_everyday_synonyms_widen_the_search(monkeypatch):
+    seen = []
+
+    class Spy(FakeEngine):
+        def page(self, snapshot, loyalty_programs=(), keywords=(), **kwargs):
+            seen.append(tuple(keywords))
+            return super().page(snapshot, loyalty_programs=loyalty_programs, **kwargs)
+    monkeypatch.setattr(runtime, "get_engine", lambda: Spy())
+    call("find_offers", {"product": "Osterhase", "postal_code": "01067", "with_images": False})
+    assert any("schokohase" in keywords for keywords in seen)
+
+
+def test_hint_when_a_retailer_has_no_computable_bonus(monkeypatch):
+    class Edeka(FakeEngine):
+        def page(self, snapshot, loyalty_programs=(), **kwargs):
+            result = super().page(snapshot, loyalty_programs=loyalty_programs, **kwargs)
+            result["offers"][1]["retailer"] = "EDEKA"
+            return result
+    monkeypatch.setattr(runtime, "get_engine", lambda: Edeka())
+    text = call("find_offers", {"product": "x", "postal_code": "01067", "with_images": False}).content[0].text
+    assert "Hinweis: Bei EDEKA gibt es keinen berechenbaren Bonuspreis" in text
+    assert "Kaufland" not in text.split("Hinweis:")[1]
+
+
+def test_source_status_lists_last_day_per_retailer():
+    from supermarkt import history
+    history.record("01067", _snapshot())
+    rows = TestClient(app).get("/health/sources").json()["retailers"]
+    assert {row["retailer"] for row in rows} == {"Kaufland", "REWE"}
+    assert all(row["days_ago"] == 0 and row["offers"] >= 1 for row in rows)

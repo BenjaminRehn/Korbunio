@@ -207,6 +207,12 @@ The server ships an MCP server at `/mcp` (Streamable HTTP). An assistant can ask
 - Clients that only speak stdio: `python -m supermarkt.mcp_bridge https://your-server/mcp` (key in `KORBUINO_MCP_KEY`). Ready-made setup lines are on `/settings`.
 - Disable with `SUPERMARKT_MCP=0`.
 
+## Operations: backup and protection
+
+- **Backup:** The data folder (`/data`, the `korbunio-data` volume in Docker) holds the price history, watches, the KitchenOwl setting with its token and the notification address. Include it in your backups.
+- **Set a key:** Without `SUPERMARKT_API_KEY`, `/settings` is open like the rest of the server, and anyone with access could change the KitchenOwl target or the notification address. Set the key as soon as you use the MCP server with its writing tools.
+- **Watching sources:** On `/settings` a table shows when the server last saw offers per retailer (JSON: `/health/sources`).
+
 ## REST API
 
 External clients and automations use:

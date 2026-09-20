@@ -11,6 +11,16 @@ from . import runtime
 router = APIRouter()
 
 
+@router.get("/health/sources", include_in_schema=False)
+def health_sources() -> dict[str, Any]:
+    """Wann hat der Server je Händler zuletzt Angebote gesehen (aus dem Preisverlauf)."""
+    from . import history
+    try:
+        return {"retailers": history.retailer_status()}
+    except Exception:  # noqa: BLE001 - Diagnose darf nie stören
+        return {"retailers": []}
+
+
 @router.get("/health", include_in_schema=False)
 def health() -> dict[str, Any]:
     engine = runtime.get_engine()

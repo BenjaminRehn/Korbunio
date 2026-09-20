@@ -64,6 +64,42 @@ INSTRUCTIONS = (
 )
 
 
+# Häufige Alltagswörter, die im Prospekt anders heißen. Bewusst klein und von Hand gepflegt.
+SYNONYMS: dict[str, tuple[str, ...]] = {
+    "osterhase": ("schokohase", "schoko-osterhase", "osterhasen"),
+    "schokohase": ("osterhase", "osterhasen"),
+    "weihnachtsmann": ("schoko-weihnachtsmann", "schokoweihnachtsmann", "nikolaus"),
+    "klopapier": ("toilettenpapier", "hygienepapier"),
+    "toilettenpapier": ("klopapier", "hygienepapier"),
+    "brötchen": ("semmel", "schrippe"),
+    "hackfleisch": ("gehacktes", "hack"),
+    "sprudel": ("mineralwasser", "sprudelwasser"),
+    "mineralwasser": ("sprudel", "wasser"),
+    "joghurt": ("jogurt",),
+    "jogurt": ("joghurt",),
+    "ketchup": ("catchup", "tomatenketchup"),
+    "mayo": ("mayonnaise",),
+    "pommes": ("pommes frites", "fritten"),
+    "eis": ("speiseeis", "eiscreme"),
+    "spülmittel": ("geschirrspülmittel", "handspülmittel"),
+    "waschmittel": ("vollwaschmittel", "colorwaschmittel", "feinwaschmittel"),
+    "cola": ("coca-cola", "pepsi"),
+    "nutella": ("nuss-nougat-creme", "nussnougatcreme"),
+    "kaffeebohnen": ("bohnenkaffee", "ganze bohne"),
+    "schmelzkäse": ("schmelzkäsezubereitung", "streichkäse"),
+    "frischkäse": ("doppelrahmfrischkäse", "streichkäse"),
+    "tiefkühlpizza": ("pizza", "steinofenpizza"),
+    "chips": ("kartoffelchips", "kartoffelsnack"),
+}
+# Händler, bei denen die Angebotsdaten keinen berechenbaren Bonuspreis hergeben.
+NO_COMPUTED_BONUS = ("EDEKA", "Globus", "Rossmann", "Müller")
+
+
+def _synonyms(product: str) -> list[str]:
+    key = " ".join(product.split()).casefold()
+    return list(SYNONYMS.get(key, ()))
+
+
 class Offer(BaseModel):
     retailer: str = Field(description="Händler, z. B. Kaufland")
     product: str
@@ -336,6 +372,7 @@ async def find_offers(
         snapshot = await _snapshot(plz, wanted, ctx)
     except StillLoading:
         return _waiting_result(plz, product)
+    also_search = [*(also_search or []), *_synonyms(product)]
     offers = await asyncio.to_thread(_offers_from, snapshot, product.strip(), also_search, wanted)
     widened = False
     if not offers:
@@ -350,6 +387,9 @@ async def find_offers(
     content: list[TextContent | ImageContent] = [TextContent(type="text", text=_summary(result))]
     if widened:
         content[0].text += "\n(Nichts mit genau diesem Begriff; gezeigt sind ähnliche Treffer zu einzelnen Wörtern.)"
+    silent = sorted({offer.retailer for offer in result.offers if offer.retailer in NO_COMPUTED_BONUS and not offer.price_with_bonus})
+    if silent:
+        content[0].text += f"\nHinweis: Bei {', '.join(silent)} gibt es keinen berechenbaren Bonuspreis; das heißt nicht, dass es keinen Vorteil gibt."
     if with_images and max_images > 0:
         shown = [offer for offer in result.offers if offer.image_url][:min(max_images, MAX_IMAGES)]
         blocks = await asyncio.gather(*(asyncio.to_thread(_image_block, offer) for offer in shown))

@@ -24,6 +24,9 @@
 <label for="list">Einkaufsliste</label><select id="list"><option value="">– erst Listen laden –</option></select>
 <div class="row"><button id="save" type="button">Speichern</button><button id="remove" class="plain" type="button">Entfernen</button></div>
 <p id="msg" role="status"></p>
+<h2>Quellen</h2>
+<p class="hint">Wann der Server je Händler zuletzt Angebote gesehen hat. Steht dort seit Tagen dasselbe Datum, liefert die Quelle nichts Neues.</p>
+<table id="sources" style="width:100%;border-collapse:collapse"></table>
 <h2>Benachrichtigung</h2>
 <p class="hint">Damit der Assistent Produkte beobachten kann („sag Bescheid, wenn Kaffee unter 5 € ist“), braucht der Server eine Adresse, an die er Meldungen schickt, zum Beispiel ein ntfy-Thema (https://ntfy.sh/dein-geheimes-thema). Die Adresse wird nur auf dem Server gespeichert und nie wieder angezeigt. Beim Speichern kommt eine Testmeldung.</p>
 <p id="notifyState" class="hint"></p>
@@ -85,6 +88,17 @@ function renderNotify(s) { $("notifyState").textContent = s.configured ? "Einger
 $("notifySave").onclick = async () => { try { renderNotify(await notifyApi("PUT", {url: $("notifyUrl").value})); $("notifyUrl").value = ""; show("Gespeichert, Testmeldung gesendet."); } catch (e) { show(e.message, true); } };
 $("notifyRemove").onclick = async () => { try { renderNotify(await notifyApi("DELETE")); show("Entfernt."); } catch (e) { show(e.message, true); } };
 notifyApi("GET").then(renderNotify).catch(() => {});
+fetch("/health/sources").then(r => r.json()).then(d => {
+  const t = $("sources");
+  const rows = d.retailers || [];
+  t.innerHTML = rows.length ? "" : "<tr><td>Noch keine Daten, sie entstehen mit dem nächsten Laden.</td></tr>";
+  rows.forEach(r => {
+    const tr = t.insertRow();
+    tr.insertCell().textContent = r.retailer;
+    tr.insertCell().textContent = r.last_day.split("-").reverse().join(".") + (r.days_ago > 8 ? " (veraltet)" : "");
+    tr.insertCell().textContent = r.offers + " Angebote";
+  });
+}).catch(() => {});
 const mcp = location.origin + "/mcp";
 $("mcpUrl").textContent = mcp;
 $("cmdJson").textContent = JSON.stringify({mcpServers: {korbuino: {type: "http", url: mcp}}}, null, 2);
