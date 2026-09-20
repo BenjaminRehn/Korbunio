@@ -45,9 +45,9 @@ SHOPPING_ADDS_PER_HOUR = int(os.environ.get("SUPERMARKT_MCP_SHOPPING_ADDS_PER_HO
 CHECK_LIST_MAX_ITEMS = 30
 # Neue Postleitzahlen (Kaltladen) pro 10 Minuten; schützt den Server vor Dauerabfragen.
 NEW_POSTAL_CODE_LIMIT = int(os.environ.get("SUPERMARKT_MCP_NEW_POSTAL_CODES_PER_10MIN", "10"))
-# Die Angebote wechseln wöchentlich (Donnerstag/Sonntag): Alle paar Stunden nachsehen genügt. Der Zwischenspeicher
+# Die Angebote wechseln wöchentlich (Donnerstag/Sonntag): Einmal am Tag nachsehen genügt. Der Zwischenspeicher
 # entscheidet, ob wirklich neu geladen wird; so ist die Antwort nach dem Wechsel schon warm.
-WARM_INTERVAL_SECONDS = 3 * 3600
+WARM_INTERVAL_SECONDS = 24 * 3600
 WARM_WHILE_USED_SECONDS = 7 * 86400
 MAX_WARM_POSTAL_CODES = 3
 

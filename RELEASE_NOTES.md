@@ -12,7 +12,7 @@
   das Werkzeug nur, wenn KitchenOwl eingerichtet ist, und es legt nur an (Artikel, die
   schon auf der Liste stehen, werden übersprungen).
 - MCP: Die Einrichtungshilfe auf `/settings` beschreibt Open WebUI. Der Hintergrunddienst sieht
-  nur alle paar Stunden nach, weil sich die Angebote wöchentlich ändern.
+  nur einmal am Tag nach, weil sich die Angebote wöchentlich ändern.
 - MCP: `price_history` (der Server schreibt jetzt den Tagespreis je Händler und Artikel
   mit), `watch_product`/`list_watches`/`remove_watch` (Bescheid per ntfy oder Webhook,
   sobald ein Produkt im Angebot ist, optional unter einem Höchstpreis; jeder Treffer nur
