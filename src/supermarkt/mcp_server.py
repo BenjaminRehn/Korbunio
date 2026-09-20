@@ -41,13 +41,14 @@ log = logging.getLogger(__name__)
 LOAD_DEADLINE_SECONDS = float(os.environ.get("SUPERMARKT_MCP_DEADLINE_SECONDS", "45"))
 MAX_IMAGES = 3
 # Schreib-Werkzeug: höchstens so viele neue Artikel pro Stunde (schützt die Einkaufsliste vor Fluten).
-SHOPPING_ADDS_PER_HOUR = int(os.environ.get("SUPERMARKT_MCP_SHOPPING_ADDS_PER_HOUR", "20"))
+SHOPPING_ADDS_PER_HOUR = int(os.environ.get("SUPERMARKT_MCP_SHOPPING_ADDS_PER_HOUR", "30"))
 CHECK_LIST_MAX_ITEMS = 30
 # Neue Postleitzahlen (Kaltladen) pro 10 Minuten; schützt den Server vor Dauerabfragen.
 NEW_POSTAL_CODE_LIMIT = int(os.environ.get("SUPERMARKT_MCP_NEW_POSTAL_CODES_PER_10MIN", "10"))
-# Zwischenspeicher: Ergebnisse dieser PLZ werden alle 25 Minuten frisch gehalten, solange gefragt wird.
-WARM_INTERVAL_SECONDS = 25 * 60
-WARM_WHILE_USED_SECONDS = 6 * 3600
+# Die Angebote wechseln wöchentlich (Donnerstag/Sonntag): Alle paar Stunden nachsehen genügt. Der Zwischenspeicher
+# entscheidet, ob wirklich neu geladen wird; so ist die Antwort nach dem Wechsel schon warm.
+WARM_INTERVAL_SECONDS = 3 * 3600
+WARM_WHILE_USED_SECONDS = 7 * 86400
 MAX_WARM_POSTAL_CODES = 3
 
 INSTRUCTIONS = (
@@ -204,18 +205,16 @@ async def _warm_loop() -> None:
     if default:
         _last_used.setdefault(default, time.time())
     delay = 60.0  # kurz nach dem Start einmal nachsehen, danach im Takt
-    refresh = False
     while True:
         await asyncio.sleep(delay)
         delay, now = WARM_INTERVAL_SECONDS, time.time()
         recent = sorted((p for p, used in _last_used.items() if now - used < WARM_WHILE_USED_SECONDS), key=lambda p: -_last_used[p])
         for plz in dict.fromkeys([*recent[:MAX_WARM_POSTAL_CODES], *_watch_postal_codes()]):
             try:
-                snapshot = await asyncio.to_thread(_load_snapshot, plz, (), refresh)
+                snapshot = await asyncio.to_thread(_load_snapshot, plz, (), False)
                 await asyncio.to_thread(_check_watches, plz, snapshot)
             except Exception:  # noqa: BLE001 - Vorwärmen darf nie stören
                 log.warning("Vorwärmen für %s fehlgeschlagen", plz, exc_info=True)
-        refresh = True
 
 
 # ---- Werkzeuge ---------------------------------------------------------------------------

@@ -10,8 +10,8 @@
 </style></head><body><main class="settingsPage"><header class="titlebar"><h1>Korb<span style="color:var(--accent)">uino</span> · Einstellungen</h1><div class="titleActions"><a class="newSearch" href="/">Angebote suchen</a></div></header>
 <h2>MCP für KI-Assistenten</h2>
 <p class="hint">Adresse des MCP-Servers: <code id="mcpUrl"></code></p>
-<p class="hint">Claude Code: <code id="cmdClaude"></code></p>
-<p class="hint">Andere Programme (JSON): <code id="cmdJson" style="white-space:pre-wrap;display:block"></code></p>
+<p class="hint"><b>Open WebUI:</b> Admin-Bereich → Einstellungen → Externe Werkzeuge → hinzufügen, Typ „MCP (Streamable HTTP)“, die Adresse oben eintragen. Verlangt der Server einen Schlüssel, Authentifizierung „Bearer“ wählen. Läuft Open WebUI in Docker, muss die Adresse von dort erreichbar sein (nicht <code>localhost</code>). Ältere Versionen ohne MCP-Unterstützung brauchen die Brücke <code>mcpo</code>.</p>
+<p class="hint">Andere Programme, zum Beispiel Claude Code (<code>claude mcp add --transport http korbuino &lt;Adresse&gt;</code>) oder JSON: <code id="cmdJson" style="white-space:pre-wrap;display:block"></code></p>
 <p class="hint">Mit Schlüssel: Header <code>Authorization: Bearer …</code> ergänzen. Programme nur mit stdio: <code>python -m supermarkt.mcp_bridge &lt;Adresse&gt;</code> (Schlüssel in <code>KORBUINO_MCP_KEY</code>).</p>
 <hr>
 <h2>KitchenOwl</h2>
@@ -87,7 +87,6 @@ $("notifyRemove").onclick = async () => { try { renderNotify(await notifyApi("DE
 notifyApi("GET").then(renderNotify).catch(() => {});
 const mcp = location.origin + "/mcp";
 $("mcpUrl").textContent = mcp;
-$("cmdClaude").textContent = "claude mcp add --transport http korbuino " + mcp;
 $("cmdJson").textContent = JSON.stringify({mcpServers: {korbuino: {type: "http", url: mcp}}}, null, 2);
 refresh();
 </script></main></body></html>
