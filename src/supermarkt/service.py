@@ -33,6 +33,7 @@ from .config import (
     RESULT_RETENTION_HOURS,
     TIMEOUT_SECONDS,
 )
+from . import history
 from .http import HttpClient, PostalCodeLocator
 from .loyalty import available_programs, normalize_program_ids
 from .offer_week import next_change_timestamp
@@ -597,7 +598,10 @@ class SupermarketEngine:
                         progress(status="processing", progress=90, source="Cache", retailer="Alle Händler", category="Alle Kategorien", step="Gespeicherter Vergleich wird geöffnet", processed_sources=1, total_sources=1, processed_products=len(cached.get("offers", [])))
                     return cached, True
             fresh = self.loader.load(postal_code, aldi_region, progress=progress, retailers=retailers, rewe_market_id=rewe_market_id, netto_market_id=netto_market_id, offer_week=offer_week, netto_scottie_market_id=netto_scottie_market_id, trinkgut_market_id=trinkgut_market_id)
-            return self.store.put(key, fresh, fresh_until=self.freshness_deadline(fresh, offer_week)), False
+            stored = self.store.put(key, fresh, fresh_until=self.freshness_deadline(fresh, offer_week))
+            if normalize_offer_week(offer_week) == "current":
+                history.record(postal_code, stored)
+            return stored, False
 
     @staticmethod
     def freshness_deadline(snapshot: dict[str, Any], offer_week: str = "current", now: datetime | None = None, weekly: bool = CACHE_WEEKLY) -> float | None:

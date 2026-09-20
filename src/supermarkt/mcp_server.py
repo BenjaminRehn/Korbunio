@@ -29,7 +29,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 
-from . import kitchenowl, runtime
+from . import history, kitchenowl, notify, runtime
 from .common import validate_postal_code
 from .images import ImageServiceError
 from .loyalty import PROGRAMS
@@ -40,6 +40,9 @@ log = logging.getLogger(__name__)
 # So lange wartet eine Frage auf das Laden, bevor sie um Geduld bittet.
 LOAD_DEADLINE_SECONDS = float(os.environ.get("SUPERMARKT_MCP_DEADLINE_SECONDS", "45"))
 MAX_IMAGES = 3
+# Schreib-Werkzeug: höchstens so viele neue Artikel pro Stunde (schützt die Einkaufsliste vor Fluten).
+SHOPPING_ADDS_PER_HOUR = int(os.environ.get("SUPERMARKT_MCP_SHOPPING_ADDS_PER_HOUR", "20"))
+CHECK_LIST_MAX_ITEMS = 30
 # Neue Postleitzahlen (Kaltladen) pro 10 Minuten; schützt den Server vor Dauerabfragen.
 NEW_POSTAL_CODE_LIMIT = int(os.environ.get("SUPERMARKT_MCP_NEW_POSTAL_CODES_PER_10MIN", "10"))
 # Zwischenspeicher: Ergebnisse dieser PLZ werden alle 25 Minuten frisch gehalten, solange gefragt wird.
@@ -55,7 +58,8 @@ INSTRUCTIONS = (
     "dann keine Aussage, dass es keinen Vorteil gibt. Preise gelten für die genannte Postleitzahl. Suche mit "
     "dem Produktnamen und, wenn nötig, Synonymen in also_search; die Suche ist eine Textsuche. Wenn es "
     "das Werkzeug add_to_shopping_list gibt, setzt es einen Artikel auf die Einkaufsliste; frage vorher, ob das "
-    "gewünscht ist, und nimm Händler und Preis aus dem Fund mit."
+    "gewünscht ist, und nimm Händler und Preis aus dem Fund mit. check_shopping_list zeigt, was von der "
+    "Einkaufsliste gerade im Angebot ist."
 )
 
 
@@ -88,6 +92,7 @@ _inflight: dict[tuple, asyncio.Task] = {}
 _last_used: dict[str, float] = {}
 _warm_started = False
 _new_postal_codes: list[float] = []
+_shopping_adds: list[float] = []
 
 
 # ---- laden -------------------------------------------------------------------------------
@@ -161,19 +166,56 @@ def _start_warmup() -> None:
         _warm_started = True
 
 
+def _watch_postal_codes() -> list[str]:
+    try:
+        return sorted({watch["postal_code"] for watch in history.list_watches()})
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _check_watches(plz: str, snapshot: dict[str, Any]) -> None:
+    """Meldet neue Treffer für die Beobachtungen dieser Postleitzahl (jeder Treffer nur einmal)."""
+    for watch in history.list_watches(plz):
+        matches = []
+        for offer in _offers_from(snapshot, watch["query"], None, ()):
+            shown = offer.price_with_bonus or offer.price_without_bonus
+            if watch["max_cents"] is None or _euro(shown) * 100 <= watch["max_cents"] + 0.5:
+                matches.append(offer)
+        keys = {f"{o.retailer}|{o.product}|{o.price_with_bonus or o.price_without_bonus}|{o.valid}": o for o in matches}
+        fresh = history.unnotified(watch["id"], list(keys))
+        if not fresh:
+            continue
+        lines = []
+        for key in fresh[:5]:
+            offer = keys[key]
+            extra = f" mit {offer.bonus_program}" if offer.price_with_bonus else ""
+            lines.append(f"{offer.retailer}: {offer.product} {offer.price_with_bonus or offer.price_without_bonus}{extra}")
+        title = f"Korbuino: {watch['query']} im Angebot"
+        try:
+            notify.send(title, "\n".join(lines))
+        except notify.NotifyError:
+            log.warning("Benachrichtigung für Beobachtung %s fehlgeschlagen", watch["id"], exc_info=True)
+            continue
+        history.mark_notified(watch["id"], fresh)
+
+
 async def _warm_loop() -> None:
     default = validate_postal_code(os.environ.get("SUPERMARKT_DEFAULT_POSTAL_CODE", "")) or ""
     if default:
         _last_used.setdefault(default, time.time())
+    delay = 60.0  # kurz nach dem Start einmal nachsehen, danach im Takt
+    refresh = False
     while True:
-        await asyncio.sleep(WARM_INTERVAL_SECONDS)
-        now = time.time()
+        await asyncio.sleep(delay)
+        delay, now = WARM_INTERVAL_SECONDS, time.time()
         recent = sorted((p for p, used in _last_used.items() if now - used < WARM_WHILE_USED_SECONDS), key=lambda p: -_last_used[p])
-        for plz in recent[:MAX_WARM_POSTAL_CODES]:
+        for plz in dict.fromkeys([*recent[:MAX_WARM_POSTAL_CODES], *_watch_postal_codes()]):
             try:
-                await asyncio.to_thread(_load_snapshot, plz, (), True)
+                snapshot = await asyncio.to_thread(_load_snapshot, plz, (), refresh)
+                await asyncio.to_thread(_check_watches, plz, snapshot)
             except Exception:  # noqa: BLE001 - Vorwärmen darf nie stören
                 log.warning("Vorwärmen für %s fehlgeschlagen", plz, exc_info=True)
+        refresh = True
 
 
 # ---- Werkzeuge ---------------------------------------------------------------------------
@@ -371,25 +413,168 @@ async def add_to_shopping_list(item: str, retailer: str = "", price: str = "", n
     settings = kitchenowl.load()
     if settings is None:
         raise ValueError("KitchenOwl ist auf diesem Server nicht eingerichtet.")
+    now = time.time()
+    _shopping_adds[:] = [t for t in _shopping_adds if now - t < 3600]
+    if len(_shopping_adds) >= SHOPPING_ADDS_PER_HOUR:
+        raise ValueError("Zu viele neue Artikel in dieser Stunde. Bitte später noch einmal.")
     try:
         added = await asyncio.to_thread(kitchenowl.add_item, settings, name, description)
     except kitchenowl.KitchenOwlError as exc:
         raise ValueError(str(exc)) from exc
+    if added:
+        _shopping_adds.append(now)
     text = f"„{name}“ steht jetzt auf der Einkaufsliste." if added else f"„{name}“ stand schon auf der Einkaufsliste."
     return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"item": name, "added": added, "note": description})
 
 
+async def check_shopping_list(postal_code: str = "", ctx: Context | None = None) -> CallToolResult:
+    """Welche Artikel auf meiner Einkaufsliste (KitchenOwl) sind gerade im Angebot? Nur lesen.
+
+    Args:
+        postal_code: Deutsche Postleitzahl (fünf Ziffern). Leer = Standard des Servers.
+    """
+    settings = kitchenowl.load()
+    if settings is None:
+        raise ValueError("KitchenOwl ist auf diesem Server nicht eingerichtet.")
+    plz = _postal_code(postal_code)
+    try:
+        items = (await asyncio.to_thread(kitchenowl.list_items, settings))[:CHECK_LIST_MAX_ITEMS]
+    except kitchenowl.KitchenOwlError as exc:
+        raise ValueError(str(exc)) from exc
+    if not items:
+        return CallToolResult(content=[TextContent(type="text", text="Die Einkaufsliste ist leer.")], structured_content={"items": []})
+    try:
+        snapshot = await _snapshot(plz, (), ctx)
+    except StillLoading:
+        return _waiting_result(plz, "Einkaufsliste")
+    rows: list[dict[str, Any]] = []
+    lines: list[str] = []
+    for entry in items:
+        offers = (await asyncio.to_thread(_offers_from, snapshot, entry["name"], None, ()))[:2]
+        rows.append({"item": entry["name"], "offers": [offer.model_dump() for offer in offers]})
+        if offers:
+            best = offers[0]
+            price = best.price_with_bonus or best.price_without_bonus
+            extra = f" mit {best.bonus_program}" if best.price_with_bonus else ""
+            lines.append(f"- {entry['name']}: {best.retailer} {best.product} {price}{extra}")
+        else:
+            lines.append(f"- {entry['name']}: nicht im Angebot")
+    on_offer = sum(1 for row in rows if row["offers"])
+    text = f"{on_offer} von {len(rows)} Artikeln der Liste sind im Angebot (PLZ {plz}):\n" + "\n".join(lines)
+    return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"postal_code": plz, "items": rows})
+
+
 def register_shopping_tool() -> bool:
     """Meldet das Einkaufslisten-Werkzeug an, wenn KitchenOwl eingerichtet ist; sonst bleibt es unsichtbar."""
-    with contextlib.suppress(Exception):
-        mcp.remove_tool("add_to_shopping_list")
+    for name in ("add_to_shopping_list", "check_shopping_list"):
+        with contextlib.suppress(Exception):
+            mcp.remove_tool(name)
     if kitchenowl.load() is None:
         return False
     mcp.add_tool(add_to_shopping_list, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True))
+    mcp.add_tool(check_shopping_list, annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
     return True
 
 
 register_shopping_tool()
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+async def price_history(product: str, postal_code: str = "", days: int = 90) -> CallToolResult:
+    """Wie haben sich die Angebotspreise für ein Produkt entwickelt? Nur was dieser Server selbst gesehen hat.
+
+    Args:
+        product: Suchbegriff, alle Wörter müssen im Namen vorkommen, z. B. "Hochland Schmelzkäse".
+        postal_code: Deutsche Postleitzahl. Leer = Standard des Servers.
+        days: Zeitraum in Tagen (1 bis 400).
+    """
+    if not product.strip():
+        raise ValueError("Bitte sage, für welches Produkt der Verlauf gewünscht ist.")
+    plz = _postal_code(postal_code)
+    rows = await asyncio.to_thread(history.price_history, product.strip(), plz, int(days))
+    if not rows:
+        text = (f"Für „{product.strip()}“ hat dieser Server bei PLZ {plz} noch keine Preise gesehen. "
+                "Der Verlauf wächst mit jedem Abruf; er beginnt erst ab der Einrichtung dieser Funktion.")
+        return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"postal_code": plz, "history": []})
+    def euro(cents: int) -> str:
+        return f"{cents / 100:.2f}".replace(".", ",") + " €"
+    lines = [
+        f"- {r['retailer']}: {r['product']} – zuletzt {euro(r['last_cents'])} ({r['last_seen']}), "
+        f"niedrigster {euro(r['lowest_cents'])}, höchster {euro(r['highest_cents'])}, an {r['days_seen']} Tag(en) gesehen seit {r['first_seen']}"
+        for r in rows
+    ]
+    return CallToolResult(content=[TextContent(type="text", text=f"Preisverlauf (PLZ {plz}):\n" + "\n".join(lines))],
+                          structured_content={"postal_code": plz, "history": rows})
+
+
+async def watch_product(product: str, max_price: str = "", postal_code: str = "") -> CallToolResult:
+    """Gib Bescheid, sobald ein Produkt im Angebot ist (optional nur unter einem Preis). Benachrichtigung per ntfy/Webhook.
+
+    Args:
+        product: Suchbegriff, z. B. "Kaffee".
+        max_price: Höchstpreis in Euro, z. B. "5,49". Leer = bei jedem Angebot.
+        postal_code: Deutsche Postleitzahl. Leer = Standard des Servers.
+    """
+    if not product.strip():
+        raise ValueError("Bitte sage, welches Produkt beobachtet werden soll.")
+    if notify.load() is None:
+        raise ValueError("Es ist keine Benachrichtigung eingerichtet (Seite /settings des Servers).")
+    plz = _postal_code(postal_code)
+    limit = None
+    if max_price.strip():
+        raw = max_price.replace("€", "").strip()
+        euros = _euro(raw if "," in raw else raw.replace(".", ","))
+        if euros == float("inf") or euros <= 0:
+            raise ValueError("Der Höchstpreis ist keine Zahl, zum Beispiel 5,49.")
+        limit = round(euros * 100)
+    watch = await asyncio.to_thread(history.add_watch, " ".join(product.split())[:80], limit, plz)
+    _last_used.setdefault(plz, time.time())
+    _start_warmup()
+    price = f" unter {max_price.strip()} €" if limit is not None else ""
+    return CallToolResult(content=[TextContent(type="text", text=f"Ich gebe Bescheid, sobald „{watch['query']}“{price} im Angebot ist (PLZ {plz}, Nr. {watch['id']}).")],
+                          structured_content=watch)
+
+
+async def list_watches() -> CallToolResult:
+    """Welche Produkte werden beobachtet?"""
+    watches = await asyncio.to_thread(history.list_watches)
+    if not watches:
+        return CallToolResult(content=[TextContent(type="text", text="Es wird nichts beobachtet.")], structured_content={"watches": []})
+    lines = [f"- Nr. {w['id']}: {w['query']}" + (f" unter {w['max_cents'] / 100:.2f} €".replace(".", ",") if w["max_cents"] else "") + f" (PLZ {w['postal_code']})" for w in watches]
+    return CallToolResult(content=[TextContent(type="text", text="\n".join(lines))], structured_content={"watches": watches})
+
+
+async def remove_watch(watch_id: int) -> CallToolResult:
+    """Beobachtung beenden.
+
+    Args:
+        watch_id: Nummer aus list_watches.
+    """
+    removed = await asyncio.to_thread(history.remove_watch, int(watch_id))
+    text = f"Beobachtung {watch_id} ist beendet." if removed else f"Eine Beobachtung {watch_id} gibt es nicht."
+    return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"removed": removed})
+
+
+def register_watch_tools() -> bool:
+    """Beobachten braucht einen Benachrichtigungsweg; ohne ihn sind die Werkzeuge unsichtbar."""
+    for name in ("watch_product", "list_watches", "remove_watch"):
+        with contextlib.suppress(Exception):
+            mcp.remove_tool(name)
+    if notify.load() is None:
+        return False
+    mcp.add_tool(watch_product, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True))
+    mcp.add_tool(list_watches, annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    mcp.add_tool(remove_watch, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False))
+    return True
+
+
+register_watch_tools()
+
+
+def start_background() -> None:
+    """Beim Serverstart aufrufen, damit Beobachtungen auch ohne MCP-Anfrage geprüft werden."""
+    if _watch_postal_codes():
+        _start_warmup()
 
 
 def main() -> None:  # pragma: no cover - Einstieg für stdio

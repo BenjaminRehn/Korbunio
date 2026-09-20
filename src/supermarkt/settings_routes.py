@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from . import kitchenowl
+from . import kitchenowl, notify
 from .security import api_key
 from .access import require_admin_auth
 from .ui import static_text
@@ -29,10 +29,11 @@ class SaveRequest(ListsRequest):
 
 def _refresh_mcp() -> None:
     try:
-        from .mcp_server import register_shopping_tool
+        from .mcp_server import register_shopping_tool, register_watch_tools
     except ImportError:  # MCP nicht installiert oder abgeschaltet
         return
     register_shopping_tool()
+    register_watch_tools()
 
 
 def _status() -> dict:
@@ -90,3 +91,31 @@ def kitchenowl_delete() -> dict:
     kitchenowl.clear()
     _refresh_mcp()
     return _status()
+
+
+class NotifyRequest(BaseModel):
+    url: str = Field(max_length=500)
+
+
+@router.get("/api/v1/notify", include_in_schema=False, dependencies=[Depends(require_settings_access)])
+def notify_status() -> dict:
+    return {"configured": notify.load() is not None}
+
+
+@router.put("/api/v1/notify", include_in_schema=False, dependencies=[Depends(require_settings_access)])
+def notify_save(payload: NotifyRequest) -> dict:
+    try:
+        url = notify.normalize_url(payload.url)
+        notify.send("Korbuino", "Test: So melden sich Beobachtungen.", url)
+        notify.save(url)
+    except notify.NotifyError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _refresh_mcp()
+    return notify_status()
+
+
+@router.delete("/api/v1/notify", include_in_schema=False, dependencies=[Depends(require_settings_access)])
+def notify_delete() -> dict:
+    notify.clear()
+    _refresh_mcp()
+    return notify_status()

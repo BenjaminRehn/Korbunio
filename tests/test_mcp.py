@@ -31,7 +31,12 @@ class FakeImages:
 
 
 @pytest.fixture(autouse=True)
-def fake_runtime(monkeypatch):
+def fake_runtime(monkeypatch, tmp_path):
+    from supermarkt import config
+    monkeypatch.setattr(config, "HISTORY_DB", tmp_path / "history.sqlite3")
+    monkeypatch.setattr(config, "NOTIFY_FILE", tmp_path / "notify.json")
+    monkeypatch.setattr(config, "KITCHENOWL_FILE", tmp_path / "kitchenowl-default.json")
+    monkeypatch.delenv("SUPERMARKT_NOTIFY_URL", raising=False)
     monkeypatch.setattr(runtime, "get_engine", lambda: FakeEngine())
     monkeypatch.setattr(runtime, "get_image_service", lambda: FakeImages())
     monkeypatch.setattr(mcp_server, "_load_snapshot", lambda plz, retailers, refresh=False: {"plz": plz})
@@ -278,3 +283,147 @@ def test_settings_need_the_admin_key_when_one_is_configured(settings_file, monke
     client = TestClient(app)
     assert client.get("/api/v1/kitchenowl").status_code == 401
     assert client.get("/api/v1/kitchenowl", headers={"Authorization": "Bearer admin-for-test"}).status_code == 200
+
+
+# ---- Preisverlauf, Beobachten, Benachrichtigen, Listenabgleich, Adapter ---------------------
+
+
+class _Receiver:
+    """Nimmt Benachrichtigungen per POST an."""
+
+    def __init__(self):
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        outer = self
+        self.messages: list[tuple[str, str]] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers["Content-Length"])).decode()
+                outer.messages.append((self.headers.get("Title", ""), body))
+                self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        self.server = HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_port}/topic"
+
+    def close(self):
+        self.server.shutdown()
+
+
+@pytest.fixture
+def receiver(monkeypatch):
+    fake = _Receiver()
+    monkeypatch.setenv("SUPERMARKT_NOTIFY_URL", fake.url)
+    assert mcp_server.register_watch_tools()
+    yield fake
+    fake.close()
+    monkeypatch.delenv("SUPERMARKT_NOTIFY_URL", raising=False)
+    mcp_server.register_watch_tools()
+
+
+def _snapshot(price_a=1.99):
+    return {"offers": [
+        {"offer_id": "a", "retailer": "Kaufland", "brand": "Hochland", "name": "Schmelzkäse", "price": price_a, "match_key": "k1"},
+        {"offer_id": "b", "retailer": "REWE", "brand": "", "name": "Schmelzkäse", "price": 1.49, "match_key": "k2"},
+        {"offer_id": "c", "retailer": "REWE", "brand": "", "name": "Ohne Preis", "price": None, "match_key": "k3"},
+    ]}
+
+
+def test_price_history_keeps_the_lowest_price_per_day_and_answers_through_the_tool():
+    from supermarkt import history
+    history.record("01067", _snapshot(1.99))
+    history.record("01067", _snapshot(1.59))  # am selben Tag: der niedrigste bleibt
+    history.record("04109", _snapshot(0.99))  # andere Postleitzahl zählt nicht
+    rows = history.price_history("schmelzkäse hochland", "01067")
+    assert len(rows) == 1 and rows[0]["lowest_cents"] == 159 and rows[0]["days_seen"] == 1
+    result = call("price_history", {"product": "Schmelzkäse", "postal_code": "01067"})
+    assert "Kaufland" in result.content[0].text and "1,59 €" in result.content[0].text
+    assert "noch keine Preise" in call("price_history", {"product": "Kaviar", "postal_code": "01067"}).content[0].text
+
+
+def test_watch_tools_need_a_notification_address(monkeypatch):
+    monkeypatch.delenv("SUPERMARKT_NOTIFY_URL", raising=False)
+    assert not mcp_server.register_watch_tools()
+    assert "watch_product" not in [tool.name for tool in asyncio.run(_tools())]
+
+
+def test_watch_notifies_once_per_new_matching_offer(receiver):
+    from supermarkt import history
+    added = call("watch_product", {"product": "Schmelzkäse", "max_price": "1,59", "postal_code": "01067"})
+    assert added.structured_content["max_cents"] == 159
+    assert "Nr." in added.content[0].text
+    assert call("list_watches", {}).structured_content["watches"][0]["query"] == "Schmelzkäse"
+    mcp_server._check_watches("01067", {"plz": "01067"})
+    assert len(receiver.messages) == 1
+    title, body = receiver.messages[0]
+    import base64
+    assert base64.b64decode(title[len("=?UTF-8?B?"):-2]).decode() == "Korbuino: Schmelzkäse im Angebot" and "REWE: Schmelzkäse 1,49 €" in body
+    mcp_server._check_watches("01067", {"plz": "01067"})  # nichts Neues
+    assert len(receiver.messages) == 1
+    assert call("remove_watch", {"watch_id": added.structured_content["id"]}).structured_content["removed"] is True
+    assert history.list_watches() == []
+
+
+def test_watch_rejects_bad_price_and_too_many(receiver):
+    assert call("watch_product", {"product": "x", "max_price": "abc", "postal_code": "01067"}).is_error
+    for number in range(20):
+        assert not call("watch_product", {"product": f"Artikel {number}", "postal_code": "01067"}).is_error
+    assert call("watch_product", {"product": "Einer zu viel", "postal_code": "01067"}).is_error
+
+
+def test_notify_settings_test_the_address_before_saving(monkeypatch, receiver):
+    client = TestClient(app)
+    monkeypatch.delenv("SUPERMARKT_NOTIFY_URL", raising=False)
+    assert client.put("/api/v1/notify", json={"url": "http://kitchen.example.test/x"}).status_code == 502
+    assert client.put("/api/v1/notify", json={"url": receiver.url}).json() == {"configured": True}
+    assert receiver.messages and "Test" in receiver.messages[-1][1]
+    assert receiver.url not in client.get("/api/v1/notify").text
+    assert client.delete("/api/v1/notify").json() == {"configured": False}
+
+
+def test_check_shopping_list_compares_the_kitchenowl_list_with_offers(kitchenowl):
+    kitchenowl.items[:] = [{"id": 1, "name": "Schmelzkäse"}, {"id": 2, "name": "Kaviar"}]
+
+    class Split(FakeEngine):
+        def page(self, snapshot, loyalty_programs=(), filter_text="", **kwargs):
+            if filter_text != "Schmelzkäse":
+                return {"offers": [], "available_loyalty_programs": []}
+            return super().page(snapshot, loyalty_programs=loyalty_programs, **kwargs)
+    import supermarkt.runtime as rt
+    rt.get_engine = lambda: Split()
+    result = call("check_shopping_list", {"postal_code": "01067"})
+    assert result.structured_content["items"][0]["offers"] and not result.structured_content["items"][1]["offers"]
+    assert "1 von 2" in result.content[0].text and "Kaviar: nicht im Angebot" in result.content[0].text
+
+
+def test_shopping_additions_are_limited_per_hour(kitchenowl, monkeypatch):
+    monkeypatch.setattr(mcp_server, "SHOPPING_ADDS_PER_HOUR", 2)
+    mcp_server._shopping_adds.clear()
+    assert not call("add_to_shopping_list", {"item": "Eins"}).is_error
+    assert not call("add_to_shopping_list", {"item": "Zwei"}).is_error
+    assert call("add_to_shopping_list", {"item": "Drei"}).is_error
+
+
+def test_stdio_bridge_forwards_json_and_event_streams():
+    import json
+    from supermarkt import mcp_bridge
+    seen = []
+
+    def post(url, body):
+        seen.append((url, body))
+        if b"stream" in body:
+            return "text/event-stream", b"event: message\ndata: {\"id\": 1}\n\n"
+        return "application/json", b'{"id": 2}'
+    assert mcp_bridge.forward("https://x/mcp", '{"stream": 1}', post) == ['{"id": 1}']
+    assert mcp_bridge.forward("https://x/mcp", '{"id": 2}', post) == ['{"id": 2}']
+    assert mcp_bridge.messages("application/json", b"") == []
+    import urllib.error
+
+    def refuse(_url, _body):
+        raise urllib.error.HTTPError("https://x/mcp", 401, "no", {}, None)
+    error = json.loads(mcp_bridge.forward("https://x/mcp", '{"jsonrpc": "2.0", "id": 5, "method": "tools/list"}', refuse)[0])
+    assert error["id"] == 5 and "401" in error["error"]["message"]
+    assert mcp_bridge.forward("https://x/mcp", '{"method": "notifications/initialized"}', refuse) == []

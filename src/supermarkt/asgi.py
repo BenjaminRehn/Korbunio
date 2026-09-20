@@ -53,6 +53,8 @@ async def _lifespan(_app: FastAPI):
     if _mcp is None:
         yield
         return
+    from .mcp_server import start_background
+    start_background()
     async with _mcp.router.lifespan_context(_mcp):
         yield
 

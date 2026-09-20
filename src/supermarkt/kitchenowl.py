@@ -127,3 +127,13 @@ def add_item(settings: Settings, name: str, description: str) -> bool:
     body = {"name": name, **({"description": description} if description else {})}
     call(settings.url, settings.token, f"/api/shoppinglist/{settings.list_id}/add-item-by-name", body)
     return True
+
+
+def list_items(settings: Settings) -> list[dict[str, str]]:
+    """Artikel auf der Liste: [{name, note}] (nur lesen)."""
+    items = call(settings.url, settings.token, f"/api/shoppinglist/{settings.list_id}/items") or []
+    return [
+        {"name": str(item["name"]).strip(), "note": str(item.get("description") or "")}
+        for item in items
+        if isinstance(item, dict) and str(item.get("name", "")).strip()
+    ]
